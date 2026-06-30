@@ -493,20 +493,39 @@ alpha / gate: [C]
 
 ```text
 G = K K^T
+G_ij = k_i^T k_j
 ```
 
-再加上 causal mask、`beta` 和 gate decay，得到一个下三角的块内依赖矩阵。直觉上
-它描述的是：
+`G_ij` 表示 chunk 内第 `i` 个 token 的 key 和第 `j` 个 token 的 key 有多相似。
+Delta rule 的块内依赖还需要把三件事合进去：
 
 ```text
-chunk 内第 i 个 token 的写入，会怎样影响后面第 j 个 token 的旧状态读取。
+causal mask：只允许过去 token j 影响未来 token i，也就是 i > j
+beta_j：第 j 个 token 的写入强度
+gate decay：从 j 写入到 i 读取之间，旧状态被 alpha 衰减了多少
+```
+
+因此可以把块内依赖矩阵记成一个严格下三角矩阵 `L`：
+
+```text
+L_ij ≈ 1[i > j] * decay(j -> i) * beta_j * (k_i^T k_j)
+```
+
+这里的 `decay(j -> i)` 是从 token `j` 到 token `i` 之间 gate 的累计衰减。不同实现
+会把 gate scaling 放在不同的张量上，但它表达的是同一件事：较早写入的状态在被
+后面 token 读取之前，会先经过若干步遗忘。
+
+`L` 描述的是：
+
+```text
+chunk 内第 j 个 token 的写入，会怎样影响后面第 i 个 token 的旧状态读取。
 ```
 
 然后 prepare 阶段会对这个下三角结构做 solve 或 inverse-like 计算。不同论文和
 实现里的符号略有差别，本文用 `A` 表示这个块内 correction 矩阵：
 
 ```text
-A ≈ inverse_or_triangular_solve(I + lower_triangular_interactions)
+A ≈ inverse_or_triangular_solve(I + L)
 ```
 
 这个 `A` 不是模型参数，而是每个 chunk 根据当前 `K, beta, gate` 临时算出来的。
