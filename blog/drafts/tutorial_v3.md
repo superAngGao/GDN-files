@@ -71,9 +71,9 @@ The rewritten structure is:
 | --- | --- |
 | 0. Roadmap and evidence contract | Define the claim boundaries, evidence lanes, and terminology. |
 | 1. Understanding the operator | Explain why GDN prefill is a recurrent-memory scheduling problem. |
-| 2. Level 1 | Build correctness, benchmark, lowering, and decision gates. |
-| 3. Level 2 | Show local AKO wins and the fixed-contract wall. |
-| 4. Level 3 | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
+| 2. Make the operator measurable | Build correctness, benchmark, lowering, and decision gates. |
+| 3. Search local implementation choices | Show local AKO wins and the fixed-contract wall. |
+| 4. Expand the search space | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
 | 5. Guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
 
 Representative narrative roadmap:
