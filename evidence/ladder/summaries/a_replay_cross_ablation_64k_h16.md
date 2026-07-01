@@ -9,8 +9,13 @@ replay side or the A-producer side improve?
 ```
 
 This file is a writing-facing evidence note. It should be used to explain the
-mechanism, not as a replacement for the controlled TileOps producer-comparison
+mechanism, not as a replacement for the TileOps experiment-adapter
 rows in `blog_ladder_evidence_64k_h16.md`.
+
+July 1 refresh: the TileOps replay rows below were rerun under the same
+`warmup=5, repeat=20, trials=3` CUPTI/L2-flush timing contract as the public
+FlashQLA TL0.1.8 export. These refreshed rows are the ones to cite in Section
+11.
 
 ## Shape And Timer
 
@@ -31,10 +36,9 @@ rows in `blog_ladder_evidence_64k_h16.md`.
 | `FQ/FQ` | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | public FlashQLA self row | 1.304489 | External anchor. |
 | `FQ/FQ producer` | public FlashQLA TL0.1.8 KKT | producer-only row | `chunk_local_cumsum + kkt_solve` | component timing only | 0.471943 | Producer-side public anchor. |
 | `FQ/FQ replay` | exported public FlashQLA A/g | public FlashQLA TL0.1.8 CP replay | `cp_preprocess + fused_gdr_fwd` | component timing only | 0.864754 | Replay-side public anchor. |
-| `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | public FlashQLA TL0.1.8 full output | 0.541727 | Directly tests FlashQLA A + TileOps replay. |
-| `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.540876 | Confirms the same row also passes the FLA oracle. |
-| `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.541167 | Same-input replay comparison. |
-| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | 0.690424 | Same-input TileOps full cross-ablation row. |
+| `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.542807 | Refreshed formal Section 11 row. Tests public FlashQLA A/g plus TileOps replay. |
+| `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.542905 | Refreshed formal Section 11 row. Same replay path with TileOps A/g. |
+| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | 0.691642 | Refreshed formal Section 11 row. Same-input TileOps producer plus replay. |
 
 ## Immediate Interpretation
 
@@ -46,7 +50,7 @@ First, the FlashQLA-learning story should be presented as three nodes:
 | --- | --- | --- |
 | local wall | direct fusion did not shorten the long replay dependency | local AKO needed an external schedule idea |
 | first correct adaptation | V5 `tileops_owned_cp_generic_a = 5.3912 ms` | TileOps adapted the CP idea, but this was not performance-near FlashQLA |
-| replay/output breakthrough before Neumann | public FlashQLA producer `0.471943 ms` + TileOps replay `0.541727 ms` gives a `1.013670 ms` estimate, faster than public FlashQLA full `1.304489 ms` | with FlashQLA-style A/KKT still in place, TileOps replay/output was already faster than the public FlashQLA back half |
+| replay/output breakthrough before Neumann | public FlashQLA producer `0.471943 ms` + TileOps replay `0.542807 ms` gives a `1.014750 ms` estimate, faster than public FlashQLA full `1.304489 ms` | with FlashQLA-style A/KKT still in place, TileOps replay/output was already faster than the public FlashQLA back half |
 
 1. The V5 `tileops_owned_cp_generic_a` row is not a faithful FlashQLA
    reproduction row. It is a controlled bridge row: generic TileOps A producer
@@ -57,15 +61,15 @@ First, the FlashQLA-learning story should be presented as three nodes:
    faster than public FlashQLA replay under this benchmark method:
 
 ```text
-0.864754 ms / 0.541727 ms = 1.60x
+0.864754 ms / 0.542807 ms = 1.59x
 ```
 
 The same TileOps replay latency appears with either public FlashQLA A/g or
 TileOps A/g:
 
 ```text
-FQ18 A + TileOps replay: 0.541727 ms
-TileOps A + TileOps replay: 0.541167 ms
+FQ18 A + TileOps replay: 0.542807 ms
+TileOps A + TileOps replay: 0.542905 ms
 ```
 
 So the replay/output speed improvement is not merely a side effect of using
@@ -75,19 +79,19 @@ There is also an A-producer-side improvement. A conservative cross-environment
 estimate for "public FlashQLA producer + TileOps replay" is:
 
 ```text
-0.471943 ms + 0.541727 ms = 1.013670 ms
+0.471943 ms + 0.542807 ms = 1.014750 ms
 ```
 
 That is faster than public FlashQLA full path:
 
 ```text
-1.304489 ms / 1.013670 ms = 1.29x
+1.304489 ms / 1.014750 ms = 1.29x
 ```
 
 but still slower than the same-input TileOps full cross-ablation row:
 
 ```text
-1.013670 ms / 0.690424 ms = 1.47x
+1.014750 ms / 0.691642 ms = 1.47x
 ```
 
 This supports the cleaner narrative:
@@ -116,11 +120,9 @@ non-finite output at 64K and are unsuitable for public attribution.
 
 - Public FlashQLA TL0.1.8 export:
   `/home/ga/Documents/gdn_kernel_bench_2026-06-18/results/flashqla_cross_ablation/fq_tl018_export_64k_h16.jsonl`
-- Public FlashQLA A/g + TileOps replay, reference public FlashQLA:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/cross_ablation_64k_h16_fq18_to_replay_only.jsonl`
-- Public FlashQLA A/g + TileOps replay, reference FLA:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/cross_ablation_64k_h16_fq18_to_replay_only_fla_ref.jsonl`
-- Same-input TileOps full row:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/cross_ablation_64k_h16_external_inputs_to_to_include_producers.jsonl`
-- Same-input TileOps replay-only row:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/cross_ablation_64k_h16_external_inputs_to_to_replay_only.jsonl`
+- Refreshed public FlashQLA A/g + TileOps replay row:
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq18_to_replay.jsonl`
+- Refreshed same-input TileOps full row:
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`
+- Refreshed same-input TileOps replay-only row:
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`

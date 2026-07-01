@@ -1,12 +1,14 @@
 # Blog Ladder Evidence: GDN Prefill 64K/H16
 
 Purpose: writing-facing evidence package for the GDN prefill blog. This file
-separates controlled producer-comparison rows from final/external anchors so the
+separates experiment-adapter rows from final/external anchors so the
 blog does not mix attribution lanes.
 
 Source evidence:
 
 - Summary: `experiments/gated_deltanet_prefill_blog_ladder/summaries/formal_64k_h16_v6_ladder.md`
+- Section 11 ablation:
+  `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_a_producer_ablation_64k_h16.md`
 - JSONL: `experiments/gated_deltanet_prefill_blog_ladder/results/formal_64k_h16_v6_ladder.jsonl`
 - Shape: `B=1,T=65536,H=16,DK=128,DV=128,chunk=64,fp16,BTHD`
 - Input artifact: `experiments/gated_deltanet_prefill_blog_ladder/results/artifacts/formal_64k_h16_seed20260630.pt`
@@ -26,7 +28,7 @@ milestone.
 | --- | --- | --- | ---: | ---: | --- |
 | baseline | `generic_a_legacy` | Current-repo generic A producer plus legacy replay/output baseline. | 25.3849 | 1.00x | Starting point for controlled TileOps producer comparison. |
 | first CP adaptation | `tileops_owned_cp_generic_a` | Same generic A producer class moved under the PR1596 CP downstream ABI and fused replay/output schedule. | 5.3912 | 4.71x | First correct TileOps-owned adaptation after studying FlashQLA; useful for V5/V6 comparison, not a claim that TileOps reproduced FlashQLA performance. |
-| producer-swap result | `tileops_owned_cp_blocked_inverse_a` | Same CP downstream ABI as the intermediate row, but swaps in blocked-inverse / Neumann-style blocksolve A producer. | 0.746707 | 7.22x | Supports the producer-swap comparison under a fixed downstream ABI. |
+| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | Same CP downstream ABI as the intermediate row, but swaps in blocked-inverse / Neumann-style blocksolve A producer. | 0.746707 | 7.22x | Useful bridge evidence, but not the clean Section 11 A-producer ablation. |
 
 Controlled end-to-end speedup from the baseline row to the producer-swap row:
 
@@ -34,7 +36,7 @@ Controlled end-to-end speedup from the baseline row to the producer-swap row:
 25.3849 ms / 0.746707 ms = 33.99x
 ```
 
-Use this only as a producer-comparison chain:
+Use this only as an experiment-adapter chain:
 
 ```text
 generic_a_legacy
@@ -45,7 +47,8 @@ generic_a_legacy
 Do not insert `tileops_final_dispatch` into this chain. It is a final candidate
 / production wrapper anchor, not a separate algorithmic step. Also do not write
 V5 as "TileOps matched FlashQLA." V5 is the first correct adaptation; the
-A/replay cross-ablation is the evidence for replay alignment.
+A/replay cross-ablation is the evidence for replay alignment and A-producer
+attribution.
 
 V5 is still useful evidence. Its poor performance relative to public FlashQLA,
 together with the mixed TileOps-owned implementation path and conservative
@@ -57,20 +60,37 @@ The FlashQLA-learning sequence should be written as:
 
 ```text
 local wall
--> V5 first correct CP adaptation
--> public FlashQLA producer + TileOps replay exceeds public FlashQLA estimate
--> V6 adds blocked-inverse / Neumann-style A producer
+  -> V5 first correct CP adaptation, still not performance-near FlashQLA
+  -> public FlashQLA producer + TileOps replay exceeds public FlashQLA estimate
+  -> TileOps blocksolve / Neumann-style A producer reduces producer-side cost
 ```
+
+The clean Section 11 numbers are:
+
+| Evidence | Latency ms | Meaning |
+| --- | ---: | --- |
+| public FlashQLA full | 1.304489 | external TL0.1.8 anchor |
+| public FlashQLA producer | 0.471943 | `chunk_local_cumsum + kkt_solve` component |
+| public FlashQLA replay | 0.864754 | public `cp_preprocess + fused_gdr_fwd` component |
+| public FlashQLA A/g + TileOps replay | 0.542807 | replay/output alignment and improvement row |
+| TileOps A/g + TileOps replay | 0.542905 | same replay path with TileOps A/g |
+| TileOps blocksolve A + TileOps replay, include producers | 0.691642 | A-producer-side improvement under TileOps replay |
+| public FlashQLA producer + TileOps replay estimate | 1.014750 | cross-environment component estimate; not a single fused full path |
+
+These numbers show that TileOps replay/output became faster before invoking the
+blocked-inverse / Neumann-style A producer. They also show that the TileOps A
+producer then reduced the producer-side cost further. This is the evidence to
+use for Section 11, not `5.3912 ms -> 0.746707 ms` by itself.
 
 ## External And Final Anchors
 
 These rows are useful context, but they should not be mixed into the controlled
-producer-comparison chain as if they were intermediate algorithmic steps.
+experiment-adapter chain as if they were intermediate algorithmic steps.
 
 | Variant | Role | Latency ms | Correctness | Use in blog |
 | --- | --- | ---: | --- | --- |
 | `ref_fla_051` | External correctness oracle and FLA latency baseline. | 18.7565 | self/reference row | May be reported as the recorded vendored FLA reference baseline, with version caveat. |
-| `tileops_final_dispatch` | Final production wrapper / dispatch context from PR1596. | 0.722839 | pass vs FLA reference | May be reported as the final production dispatch row, not as a producer-comparison step. |
+| `tileops_final_dispatch` | Final production wrapper / dispatch context from PR1596. | 0.722839 | pass vs FLA reference | May be reported as the final production dispatch row, not as an experiment-adapter step. |
 
 `tileops_final_dispatch` is slightly faster than the explicit V6 adapter:
 
@@ -140,10 +160,13 @@ Supported:
   producer support a process claim: the agent was adapting an external schedule
   idea rather than reproducing a finished FlashQLA kernel, and the failed
   intermediate row helped identify the need for A/replay cross-ablation.
-- `tileops_owned_cp_generic_a -> tileops_owned_cp_blocked_inverse_a` supports:
-  under the same CP downstream ABI and materialized A handoff shape/layout,
-  replacing the generic A producer with blocked-inverse / Neumann-style
-  blocksolve A produces the second large full-op speedup.
+- The refreshed Section 11 cross-ablation supports: with public FlashQLA A/g
+  fixed, TileOps replay is `0.542807 ms`; with TileOps A/g fixed, the same
+  replay is `0.542905 ms`; and TileOps full producer plus replay is
+  `0.691642 ms`. That is the cleaner evidence for the A/replay split.
+- `tileops_owned_cp_generic_a -> tileops_owned_cp_blocked_inverse_a` supports
+  only an experiment-adapter bridge under the same CP downstream ABI; it should
+  not be presented as the main A-producer ablation.
 - `tileops_owned_cp_blocked_inverse_a -> tileops_final_dispatch` supports:
   final production wrapper / dispatch context is consistent with the V6
   blocked-inverse path and is the row to cite for production-candidate latency.
