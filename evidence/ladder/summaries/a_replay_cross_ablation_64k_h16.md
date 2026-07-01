@@ -29,8 +29,8 @@ rows in `blog_ladder_evidence_64k_h16.md`.
 | Row | A producer | Replay/output | Timing scope | Correctness reference | Latency ms | Use |
 | --- | --- | --- | --- | --- | ---: | --- |
 | `FQ/FQ` | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | public FlashQLA self row | 1.304489 | External anchor. |
-| `FQ/FQ producer` | public FlashQLA TL0.1.8 KKT | N/A | `chunk_local_cumsum + kkt_solve` | N/A | 0.471943 | Producer-side public anchor. |
-| `FQ/FQ replay` | exported public FlashQLA A/g | public FlashQLA TL0.1.8 CP replay | `cp_preprocess + fused_gdr_fwd` | N/A | 0.864754 | Replay-side public anchor. |
+| `FQ/FQ producer` | public FlashQLA TL0.1.8 KKT | producer-only row | `chunk_local_cumsum + kkt_solve` | component timing only | 0.471943 | Producer-side public anchor. |
+| `FQ/FQ replay` | exported public FlashQLA A/g | public FlashQLA TL0.1.8 CP replay | `cp_preprocess + fused_gdr_fwd` | component timing only | 0.864754 | Replay-side public anchor. |
 | `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | public FlashQLA TL0.1.8 full output | 0.541727 | Directly tests FlashQLA A + TileOps replay. |
 | `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.540876 | Confirms the same row also passes the FLA oracle. |
 | `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.541167 | Same-input replay comparison. |
@@ -39,6 +39,14 @@ rows in `blog_ladder_evidence_64k_h16.md`.
 ## Immediate Interpretation
 
 The old explanation was under-specified. The data says two things at once:
+
+First, the FlashQLA-learning story should be presented as three nodes:
+
+| Node | Evidence | Meaning |
+| --- | --- | --- |
+| local wall | direct fusion did not shorten the long replay dependency | local AKO needed an external schedule idea |
+| first correct adaptation | V5 `tileops_owned_cp_generic_a = 5.3912 ms` | TileOps adapted the CP idea, but this was not performance-near FlashQLA |
+| replay/output breakthrough before Neumann | public FlashQLA producer `0.471943 ms` + TileOps replay `0.541727 ms` gives a `1.013670 ms` estimate, faster than public FlashQLA full `1.304489 ms` | with FlashQLA-style A/KKT still in place, TileOps replay/output was already faster than the public FlashQLA back half |
 
 1. The V5 `tileops_owned_cp_generic_a` row is not a faithful FlashQLA
    reproduction row. It is a controlled bridge row: generic TileOps A producer

@@ -25,7 +25,7 @@ milestone.
 | Role | Variant | Blog meaning | Latency ms | Speedup vs previous | Use |
 | --- | --- | --- | ---: | ---: | --- |
 | baseline | `generic_a_legacy` | Current-repo generic A producer plus legacy replay/output baseline. | 25.3849 | 1.00x | Starting point for controlled TileOps producer comparison. |
-| intermediate/control | `tileops_owned_cp_generic_a` | Same generic A producer class moved under the PR1596 CP downstream ABI and fused replay/output schedule. | 5.3912 | 4.71x | Intermediate/control row from the FlashQLA-learning phase; useful for V5/V6 comparison, not a headline milestone. |
+| first CP adaptation | `tileops_owned_cp_generic_a` | Same generic A producer class moved under the PR1596 CP downstream ABI and fused replay/output schedule. | 5.3912 | 4.71x | First correct TileOps-owned adaptation after studying FlashQLA; useful for V5/V6 comparison, not a claim that TileOps reproduced FlashQLA performance. |
 | producer-swap result | `tileops_owned_cp_blocked_inverse_a` | Same CP downstream ABI as the intermediate row, but swaps in blocked-inverse / Neumann-style blocksolve A producer. | 0.746707 | 7.22x | Supports the producer-swap comparison under a fixed downstream ABI. |
 
 Controlled end-to-end speedup from the baseline row to the producer-swap row:
@@ -43,15 +43,24 @@ generic_a_legacy
 ```
 
 Do not insert `tileops_final_dispatch` into this chain. It is a final candidate
-/ production wrapper anchor, not a separate algorithmic step. Also do not make
-V5 the main FlashQLA-learning performance result; the A/replay cross-ablation is
-the better evidence for replay alignment.
+/ production wrapper anchor, not a separate algorithmic step. Also do not write
+V5 as "TileOps matched FlashQLA." V5 is the first correct adaptation; the
+A/replay cross-ablation is the evidence for replay alignment.
 
 V5 is still useful evidence. Its poor performance relative to public FlashQLA,
 together with the mixed TileOps-owned implementation path and conservative
 generic A producer, supports the process claim that the agent was adapting a
 schedule idea rather than reproducing a finished kernel. The incomplete
 intermediate row motivated the cleaner A/replay attribution experiment.
+
+The FlashQLA-learning sequence should be written as:
+
+```text
+local wall
+-> V5 first correct CP adaptation
+-> public FlashQLA producer + TileOps replay exceeds public FlashQLA estimate
+-> V6 adds blocked-inverse / Neumann-style A producer
+```
 
 ## External And Final Anchors
 
