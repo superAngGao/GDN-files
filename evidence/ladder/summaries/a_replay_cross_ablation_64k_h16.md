@@ -17,6 +17,11 @@ July 1 refresh: the TileOps replay rows below were rerun under the same
 FlashQLA TL0.1.8 export. These refreshed rows are the ones to cite in Section
 11.
 
+We also attempted a true measured combined row using the current-TL migrated
+FlashQLA-style KKT producer feeding TileOps replay. That row is measurable, but
+it fails correctness at `64K/H16` in all tested GEMM compatibility modes, so it
+is recorded as a rejected diagnostic rather than a performance row.
+
 ## Shape And Timer
 
 - Shape: `B=1,T=65536,H=16,DK=128,DV=128,chunk=64,fp16,BTHD`
@@ -103,6 +108,34 @@ TileOps later improves two implementation axes:
   2. A producer via the blocked-inverse / Neumann-style path.
 ```
 
+## Rejected Measured Combined Row
+
+The row we would prefer to use is:
+
+```text
+current-TL FlashQLA-style KKT producer + TileOps replay
+```
+
+It was tested, but rejected by correctness:
+
+| Row | GEMM compatibility mode | Latency ms | Correctness |
+| --- | --- | ---: | --- |
+| `FQ/TO` include producers | `default` | 0.811018 | fail, nonfinite output |
+| `FQ/TO` include producers | `legacy` | 1.958386 | fail, nonfinite output |
+| `FQ/TO` include producers | `wgmma` | 0.808363 | fail, nonfinite output |
+
+Diagnostic summary:
+
+```text
+g_cum current-TL vs TL0.1.8 artifact: exact match
+current-TL KKT A: 562 nonfinite values, range hits +/-65504
+TL0.1.8 exported A: 0 nonfinite values, range [-0.269, 1.0]
+```
+
+This is why the valid FlashQLA-style row is still a component-sum estimate:
+the only correct public FlashQLA producer evidence is currently the TL0.1.8
+component plus its exported A/g artifact.
+
 ## What This Does Not Prove
 
 Do not claim that V5 is a full FlashQLA reproduction. It is not.
@@ -126,3 +159,7 @@ non-finite output at 64K and are unsuitable for public attribution.
   `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`
 - Refreshed same-input TileOps replay-only row:
   `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`
+- Rejected measured current-TL FlashQLA-style producer + TileOps replay rows:
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl`

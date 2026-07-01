@@ -1012,6 +1012,30 @@ TileOps blocksolve producer + TileOps replay:       0.691642 ms
 
 That is a `1.47x` producer-side improvement in this cross-ablation.
 
+Why is the first line still called an estimate? Because the direct measured
+combined row was tried and rejected. The harness can run:
+
+```text
+current-TL FlashQLA-style KKT producer + TileOps replay
+```
+
+but at `64K/H16` it fails correctness. Under the three tested GEMM
+compatibility modes, the measured rows were:
+
+| Row | GEMM mode | Latency | Correctness |
+| --- | --- | ---: | --- |
+| `FQ/TO` include producers | `default` | `0.811018 ms` | fail, nonfinite output |
+| `FQ/TO` include producers | `legacy` | `1.958386 ms` | fail, nonfinite output |
+| `FQ/TO` include producers | `wgmma` | `0.808363 ms` | fail, nonfinite output |
+
+A diagnostic confirmed that `g_cum` matches the public TL0.1.8 artifact, while
+the current-TL KKT producer emits invalid `A` values at this shape. So the
+article should not hide behind an estimate, but it also should not cite a
+wrong measured row. The correct statement is: we attempted the measured
+combined row; it is rejected by correctness; the valid FlashQLA-style evidence
+therefore remains the TL0.1.8 producer component plus exported TL0.1.8 A/g
+artifact replayed by TileOps.
+
 The V5/V6 adapter rows should be kept as supporting bridge evidence only. V5
 and V6 use the same CP downstream ABI and materialized A handoff shape/layout,
 but they do not produce numerically equivalent A tensors. The recorded A
@@ -1454,6 +1478,18 @@ adapter jump as the main A-producer proof. The cleaner ablation is:
 public FlashQLA producer + TileOps replay estimate: 1.014750 ms
 TileOps blocksolve producer + TileOps replay:       0.691642 ms
 ```
+
+We did try to replace the estimate with a measured combined row:
+
+```text
+current-TL FlashQLA-style KKT producer + TileOps replay
+```
+
+That row is measurable but not correct at `64K/H16`: `default`, `legacy`, and
+`wgmma` GEMM compatibility modes all produced nonfinite outputs. The failure is
+localized to the current-TL KKT producer, since `g_cum` matches the TL0.1.8
+artifact while the current-TL `A` contains nonfinite/extreme values. Therefore
+the measured combined row is a rejected diagnostic, not a performance point.
 
 The supported narrative is therefore:
 

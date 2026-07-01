@@ -32,6 +32,44 @@ adaptation, not the controlled A-producer ablation.
 All refreshed TileOps rows pass correctness against the recorded vendored FLA
 reference.
 
+## Rejected Measured Combined Rows
+
+We also tried the row that would remove the need for the component-sum
+estimate:
+
+```text
+current-TL FlashQLA-style KKT producer + TileOps PR1596 replay
+```
+
+This is exactly the "replace TileOps blocksolve / Neumann producer with a
+FlashQLA-style producer under the same TileOps replay path" test. It is
+measurable in the harness, but it is not correct at `64K/H16`.
+
+| Row | GEMM compatibility mode | Timing scope | Latency ms | Correctness | Failure |
+| --- | --- | --- | ---: | --- | --- |
+| `FQ/TO` | `default` | include producers | 0.811018 | fail | `o` has 18,898,944 nonfinite values; final_state has 16,384 nonfinite values |
+| `FQ/TO` | `legacy` | include producers | 1.958386 | fail | `o` has 31,887,360 nonfinite values; final_state differs beyond tolerance |
+| `FQ/TO` | `wgmma` | include producers | 0.808363 | fail | `o` has 20,946,944 nonfinite values; final_state has 16,384 nonfinite values |
+
+The root cause is the current-TL FlashQLA KKT producer, not the replay
+handoff. A direct diagnostic on the same artifact showed:
+
+```text
+g_cum current-TL vs TL0.1.8 artifact: exact match
+current-TL KKT A: 562 nonfinite values, range hits +/-65504
+TL0.1.8 exported A: 0 nonfinite values, range [-0.269, 1.0]
+```
+
+Therefore, the measured combined row exists but is rejected. Until the
+current-TL FlashQLA-style KKT producer is fixed, the correct evidence remains:
+
+1. public TL0.1.8 FlashQLA producer component;
+2. exported TL0.1.8 A/g artifact;
+3. TileOps replay on that artifact.
+
+That is why the `public FlashQLA producer + TileOps replay` number is still a
+component-sum estimate rather than a measured full row.
+
 ## Derived Comparisons
 
 TileOps replay is faster than the public FlashQLA replay component on this
@@ -111,6 +149,11 @@ component-sum estimate, not a single measured fused full path. The producer
 component comes from the TL0.1.8 FlashQLA docker; the TileOps replay component
 comes from the current TileOps harness.
 
+We did attempt the single measured combined path in the current harness, but
+the current-TL FlashQLA-style KKT producer failed correctness at `64K/H16`
+under `default`, `legacy`, and `wgmma` compatibility modes. Those failed rows
+should be reported as rejected diagnostics, not performance evidence.
+
 The V5 bridge row should not be called "FlashQLA-style A plus production
 replay." It uses a conservative generic TileOps A producer under a mixed
 experiment adapter.
@@ -128,3 +171,7 @@ shape and are rejected for attribution.
   `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`
 - Refreshed TileOps full row:
   `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`
+- Rejected measured current-TL FlashQLA-style producer + TileOps replay rows:
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`
+  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl`

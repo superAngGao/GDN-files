@@ -82,6 +82,17 @@ blocked-inverse / Neumann-style A producer. They also show that the TileOps A
 producer then reduced the producer-side cost further. This is the evidence to
 use for Section 11, not `5.3912 ms -> 0.746707 ms` by itself.
 
+We also attempted a true measured combined row:
+
+```text
+current-TL FlashQLA-style KKT producer + TileOps replay
+```
+
+It failed correctness at `64K/H16` under `default`, `legacy`, and `wgmma`
+GEMM compatibility modes, producing nonfinite outputs. That rejected diagnostic
+is why the public FlashQLA producer plus TileOps replay row remains a
+component-sum estimate rather than a measured full path.
+
 ## External And Final Anchors
 
 These rows are useful context, but they should not be mixed into the controlled
