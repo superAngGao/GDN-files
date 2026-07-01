@@ -97,11 +97,11 @@ only at one `64K/H16` point. The public-facing roadmap names story nodes, not
 internal variant IDs; the exact variant-to-code mapping is maintained in the
 supporting information and evidence inventory.
 
-| Story node | Blog meaning | Latency | Perf vs recorded FLA (%) | Perf vs public FlashQLA (%) |
+| Story node | Blog meaning | Latency | Perf vs recorded FLA (%) | Perf vs public FlashQLA SOTA (%) |
 | --- | --- | ---: | ---: | ---: |
-| initial correctness | the first serving prefill op is correct and measurable | `11.1762 ms` | `71.8%` | N/A |
-| local prepare specialization | local AKO improves the fixed-contract path, but does not change replay depth | `10.8353 ms` | `74.1%` | N/A |
-| local wall | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `5.5566 ms` | `144.4%` | N/A |
+| initial correctness | the first serving prefill op is correct and measurable | `11.1762 ms` | `71.8%` | `11.7%` |
+| local prepare specialization | local AKO improves the fixed-contract path, but does not change replay depth | `10.8353 ms` | `74.1%` | `12.1%` |
+| local wall | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `5.5566 ms` | `144.4%` | `23.5%` |
 | <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`1.306838 ms`</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
 | FlashQLA-style A + TileOps replay | after studying FlashQLA, the improved TileOps replay/output path reaches the performance neighborhood before Neumann | `0.815029 ms` | `984.7%` | `160.3%` |
 | Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `0.715062 ms` | `1122.4%` | `182.8%` |
