@@ -151,8 +151,9 @@ The figures should explain strategy changes, not decorate the text.
 
 Current status: main text now includes two compact Level-2 AKO episodes
 (`scale placement` and `direct fusion`) using the hypothesis/edit/gate/decision
-shape. Further polish may add one Level-3 episode or move detailed episode
-evidence to SI.
+shape, with repo-relative evidence pointers and scoped equivalence wording for
+the scale-placement case. Further polish may add one Level-3 episode or move
+detailed episode evidence to SI.
 
 ### P1 - Evidence Hygiene
 

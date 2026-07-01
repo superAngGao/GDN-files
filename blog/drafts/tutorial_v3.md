@@ -440,12 +440,30 @@ hypothesis -> TileLang edit -> correctness gate -> benchmark/lowering evidence
            -> keep, reject, or turn into a sharper next question
 ```
 
-Two examples make the agentic part less abstract:
+Two examples make the agentic part less abstract. Evidence pointers:
+`../../evidence/ladder/summaries/blog_ladder_evidence_64k_h16.md` and
+`../../evidence/ladder/docs/variant_inventory.md`.
 
-| Episode | Agent hypothesis | Code/search move | Gate result | Decision |
-| --- | --- | --- | --- | --- |
-| scale placement | the gate scale can move across the outer product without changing the math | apply the scale on the value tile that already feeds the state update | correctness preserved; replay component latency improved in historical diagnostics | keep as a local data-path win |
-| direct fusion | if global intermediates are expensive, fusing replay/output should solve long-context latency | prototype a fused path that writes only `o` and `final_state` | correctness/compile/latency gates showed fusion alone did not remove the long replay dependency | reject as the main long-context answer; use the failure to motivate CP split |
+**Episode A: scale placement.**
+
+- Hypothesis: under this replay recurrence, ABI, dtype, and correctness
+  contract, the per-token gate scale can move from the key tile to the value
+  tile without changing the operator result.
+- TileLang move: apply the scale on the value tile that already feeds the state
+  update.
+- Gate result: correctness was preserved, and replay component latency improved
+  in historical diagnostics.
+- Decision: keep as a local data-path win.
+
+**Episode B: direct fusion.**
+
+- Hypothesis: if global intermediates are expensive, fusing replay/output should
+  solve long-context latency.
+- TileLang move: prototype a fused path that writes only `o` and `final_state`.
+- Gate result: correctness/compile/latency evidence showed that fusion alone
+  did not remove the long replay dependency.
+- Decision: reject as the main long-context answer; use the failure to motivate
+  CP split.
 
 The important pattern is not that the agent always picked the final global
 direction. It generated plausible local moves, ran them through gates, and made
