@@ -81,24 +81,24 @@ Representative narrative roadmap:
 Relative performance is reported as throughput relative to a reference:
 `reference_latency / variant_latency * 100%`. `100%` means parity with the
 reference; values above `100%` mean the variant has higher throughput than the
-recorded FLA reference. This roadmap intentionally mixes evidence scopes:
-component diagnostics explain local wins, historical diagnostics mark the wall,
-and formal full-op rows support the final comparison. The `64K/H16` formal rows
-use `B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, H200/GPU4, and the same
-input artifact hash:
+recorded FLA reference. This roadmap uses end-to-end rows only. Component
+diagnostics still appear in the body, but they do not enter the headline
+roadmap until they have a matching full-op row. The `64K/H16` formal rows use
+`B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, H200/GPU4, and the same input
+artifact hash:
 `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`.
 
-| Story node | Evidence scope | Representative result | Blog meaning | Perf vs recorded FLA (%) |
+| Story node | Evidence scope | Representative end-to-end result | Blog meaning | Perf vs recorded FLA (%) |
 | --- | --- | ---: | --- | ---: |
 | initial correctness | formal full-op | `generic_a_legacy = 25.3849 ms` | the operator is correct and measurable, but the legacy replay/output path is slow | `73.9%` |
-| local AKO: scale placement | historical component diagnostic | replay component `2.2725 ms -> 1.6277 ms` | local algebraic placement can remove a buffer without changing math | N/A |
-| local AKO: store path | historical component diagnostic | recompute/store component `0.46791766 ms -> 0.27223574 ms` | matching arithmetic is not enough; store layout and staging matter | N/A |
 | local wall | historical full-op diagnostic | direct fused no-CP skeleton `~4.15 ms` | fusion removes some materialization, but the long replay dependency remains | `~452%` historical / not same-run |
 | FlashQLA reference | external public full-op anchor | public FlashQLA TL0.1.8 full `1.306838 ms` | Qwen FlashQLA supplies the production CP-split schedule family | `~1435%` public-env |
-| FlashQLA schedule adapted | experiment bridge / full-op | V5 `tileops_owned_cp_generic_a = 5.3912 ms` | first correct TileOps-owned CP adaptation; useful bridge row, not FlashQLA reproduction | `347.9%` |
 | FlashQLA-style A + TileOps replay | external-lowering full-op harness | TL0.1.8-lowering prepare + TileOps replay `0.812982 ms` | the schedule family reaches the expected performance neighborhood before Neumann | `~2307%` |
 | Neumann prepare | formal full-op | TileOps blocksolve A + TileOps replay `0.691642 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `~2712%` |
-| final production context | formal full-op wrapper | `tileops_final_dispatch = 0.722839 ms` | production wrapper / dispatch context for the current scoped candidate | `2594.8%` |
+
+`tileops_final_dispatch = 0.722839 ms` is a production-wrapper anchor, not a
+post-Neumann improvement over the `0.691642 ms` experiment row. Keep it in the
+final/evidence section, not in the positive story ladder.
 
 Component diagnostics, failed candidates, and migration/lowering anchors belong
 in the supporting evidence or appendix. A blocker row may appear only as an
@@ -1293,9 +1293,10 @@ The final dispatch row is slightly faster than the explicit V6 adapter:
 0.746707 ms / 0.722839 ms = 1.03x
 ```
 
-Write this as a production wrapper / dispatch-context observation. Do not write
-it as an additional algorithmic improvement after the blocked-inverse A
-producer.
+But it is slower than the cleaner Section 11 TileOps prepare-A full row
+(`0.691642 ms`). Write `tileops_final_dispatch` as a production wrapper /
+dispatch-context observation, not as the fastest measured row and not as an
+additional algorithmic improvement after the blocked-inverse A producer.
 
 FlashQLA remains the public schedule and performance reference. The refreshed
 public FlashQLA TL0.1.8 anchor for the same `64K/H16` shape is `1.306838 ms`
