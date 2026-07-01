@@ -1,18 +1,10 @@
 # Agentic TileLang Kernel Tuning: Gated DeltaNet Prefill
 
-Draft status: v3 rewrite checkpoint 4. This file rewrites the opening,
-Level 1, Level 2, Level 3, and the first formal `64K/H16` evidence package.
-
-Publication status: not final. The `64K/H16` evidence package has been
-refreshed under a formal harness, including a public FlashQLA TL0.1.8 anchor
-for that shape. The production-surface sweep has also been refreshed for five
-serving shapes. Public-environment percentage framing, FLA package identity,
-and final formula copyediting still need publication review. The
-Neumann/blocksolve section now uses implementation-scoped notation and must
-keep its ABI caveats.
-
-Figure note: figures below are Mermaid placeholders for final publication
-graphics.
+Draft note: this is a working tutorial draft. The roadmap numbers have been
+refreshed from the current `64K/H16` evidence package and a five-shape
+production-surface sweep. Detailed evidence, rejected rows, ABI caveats, and
+benchmark metadata live in `tutorial_v3_si.md`. Figures are Mermaid placeholders
+for final publication graphics.
 
 ## 0. Roadmap And Evidence Contract
 
