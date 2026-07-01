@@ -13,7 +13,7 @@ keep its ABI caveats.
 Figure note: figures below are Mermaid placeholders for final publication
 graphics.
 
-## 0. The Story This Article Is Trying To Tell
+## Roadmap And Evidence Contract
 
 This is not a story about an AI magically inventing a faster GPU kernel. It is
 a story about how agents become useful when a kernel problem is made
@@ -65,6 +65,17 @@ This article therefore uses a three-level structure rather than a chronological
 round diary. The performance story should also be read as a sequence of
 milestones, control rows, and anchors, not as disconnected per-section tables.
 
+The rewritten structure is:
+
+| Part | Purpose |
+| --- | --- |
+| Roadmap and evidence contract | Define the claim boundaries, evidence lanes, and terminology. |
+| Part I: operator | Explain why GDN prefill is a recurrent-memory scheduling problem. |
+| Part II: Level 1 | Build correctness, benchmark, lowering, and decision gates. |
+| Part III: Level 2 | Show local AKO wins and the fixed-contract wall. |
+| Part IV: Level 3 | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
+| Part V: guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
+
 Representative full-op roadmap:
 
 Relative performance is reported as throughput relative to a reference:
@@ -79,7 +90,7 @@ artifact hash:
 | --- | --- | --- | --- | ---: | ---: |
 | baseline | `generic_a_legacy` | legacy replay/output, generic A | starting point after correctness gates | `25.3849 ms` | `73.9%` |
 | first CP adaptation | `tileops_owned_cp_generic_a` | early TileOps CP downstream adapter, conservative generic A | first correct TileOps-owned result after studying FlashQLA; useful, but still not performance-near FlashQLA | `5.3912 ms` | `347.9%` |
-| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP split, blocked-inverse / Neumann-style A | bridge evidence for the A-producer implementation; Section 11 uses the full prepare-A comparison for causality | `0.746707 ms` | `2511.9%` |
+| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP split, blocked-inverse / Neumann-style A | bridge evidence for the A-producer implementation; the Neumann prepare section uses the full prepare-A comparison for causality | `0.746707 ms` | `2511.9%` |
 | final anchor | `tileops_final_dispatch` | shape-aware production dispatch | final production wrapper / dispatch context, not an experiment-adapter step | `0.722839 ms` | `2594.8%` |
 
 The experiment-adapter chain is:
@@ -110,7 +121,7 @@ explicit publication blocker; it must not be read as a formal result.
 The final article should not mix component rows, external FlashQLA anchors, and
 TileOps experiment-adapter rows into one apparent speedup ladder.
 
-## 1. Terminology And Scope
+### Terminology And Scope
 
 The final article will compare TileOps, FLA, and FlashQLA, but their roles are
 different:
@@ -141,7 +152,12 @@ TileOps vs FlashQLA is a public-environment comparison, not a controlled
 same-lowering replay attribution experiment.
 ```
 
-## 2. Why GDN Prefill Is Hard
+## Part I: Understanding The Operator
+
+This part builds the operator model before any kernel tuning appears. The goal
+is to make the reader understand why GDN prefill is hard: it is a recurrent
+memory update with chunk-local causal work, long cross-chunk replay, and an
+output path that must remain equivalent to token-by-token decode.
 
 Standard attention computes pairwise token interactions, even when modern
 kernels avoid materializing the full matrix. Linear attention-style models
@@ -183,7 +199,7 @@ remove global intermediate tensors, but it does not by itself shorten the
 causal replay dependency. That distinction becomes central later when the
 article reaches FlashQLA's CP-split schedule.
 
-## 3. GDN As A Recurrent Memory
+### GDN As A Recurrent Memory
 
 This section uses implementation-facing schematic notation. The exact
 orientation of row/column vectors and the exact gate exponent placement should
@@ -278,7 +294,11 @@ boundaries remain useful for testing and attribution.
 The figure is deliberately higher-level than a kernel listing. The purpose is
 to expose component boundaries that can be tested, timed, and optimized.
 
-## 4. What Level 1 Means: Make The Operator Measurable
+## Part II: Level 1 - Make The Operator Measurable
+
+Level 1 is the correctness and measurement layer. Before the agent can tune a
+kernel, it needs a reference, a decomposition, a timer, lowering artifacts, and
+a decision log that makes each candidate accept/reject outcome auditable.
 
 The first useful agent capability was not performance tuning. It was helping
 turn the operator into something that could be tested and measured.
@@ -373,7 +393,12 @@ placement, store paths, and early fusion attempts. Level 3 will show what
 happened when external input changed the search space: human blocked
 inverse/Neumann prepare, and Qwen FlashQLA's CP-split schedule for long replay.
 
-## 5. Level 2: Local AKO Inside A Fixed Contract
+## Part III: Level 2 - Local AKO Inside A Fixed Contract
+
+Level 2 is where local agentic kernel optimization works well. The math and
+schedule contract stay fixed, while the agent searches TileLang expression
+choices, memory paths, staging choices, and small fusion candidates under the
+same correctness and benchmark gates.
 
 Once the operator was measurable, the agent could start doing useful kernel
 work. The important phrase is "inside a fixed contract." In Level 2, the
@@ -409,7 +434,7 @@ flowchart LR
     Base --> Scale --> Store --> Fusion --> Wall
 ```
 
-## 6. Local Win: Move The Scale, Remove The Buffer
+### Local Win: Move The Scale, Remove The Buffer
 
 The first clean local win came from the replay update. The recurrence update
 contains a per-token gate scale. One expression scales the key side before the
@@ -488,7 +513,7 @@ replay component latency improving from `2.2725 ms` to `1.6277 ms`.
 These rows show why the scale-placement rewrite mattered, but they are
 trajectory evidence, not final public benchmark claims.
 
-## 7. Local Diagnostic: The Store Path Was The Bottleneck
+### Local Diagnostic: The Store Path Was The Bottleneck
 
 The second Level 2 lesson came from recomputing the effective writes `w` and
 `u` from the chunk-local matrix `A`. At a high level, the arithmetic is simple:
@@ -559,7 +584,7 @@ can still lose in synchronization, layout conversion, or global store traffic.
 The agent can propose and test variants, but component timing and generated
 code inspection decide which story is true.
 
-## 8. Local Wall: Fusion Alone Did Not Shorten Replay
+### Local Wall: Fusion Alone Did Not Shorten Replay
 
 After scale placement and store-path tuning, the natural next hypothesis was
 fusion. If the pre-CP component path spends time writing and reading
@@ -643,7 +668,13 @@ performance jump needed a different search space:
 
 Those are Level 3 topics.
 
-## 9. Level 3: External Input Changes The Search Space
+## Part IV: Level 3 - External Input Changes The Search Space
+
+Level 3 is where the search space changes. FlashQLA supplied the
+production-grade CP-split replay schedule family; human mathematical analysis
+supplied the blocked-inverse / Neumann-style prepare producer. The TileOps work
+then became an adaptation, implementation, tuning, and productionization story
+inside those expanded spaces.
 
 Level 2 found useful local improvements, but it also found the wall. The
 operator was correct and measurable. The agent could move a scale, fix a store
@@ -696,7 +727,7 @@ This map is deliberately blunt. It prevents both bad stories: TileOps did not
 invent FlashQLA's CP-split replay schedule, and the TileOps work was not just
 reproducing a finished FlashQLA kernel.
 
-## 10. Expert Reference Expansion: FlashQLA CP-Split Replay
+### Expert Reference: FlashQLA CP-Split Replay
 
 Qwen FlashQLA supplied the production reference for attacking the long replay
 bottleneck. TileOps did not invent the CP-split replay schedule. The
@@ -811,7 +842,7 @@ production path. The other half of the production path is the A producer, whose
 stronger TileOps shape came from an earlier human blocked inverse /
 Neumann-style reframing.
 
-## 11. Human Search-Space Expansion: Blocked Inverse / Neumann Prepare
+### Human Search-Space Expansion: Blocked Inverse / Neumann Prepare
 
 The prepare stage builds the chunk-local correction matrix `A` used to produce
 the effective writes `w` and `u`. In the FlashQLA-style flow, `A` is one of
@@ -972,11 +1003,17 @@ failed attempts are recorded only as diagnostics:
 | `FQ/TO` include producers | `legacy` | `1.958386 ms` | correctness fail, nonfinite output |
 | `FQ/TO` include producers | `wgmma` | `0.808363 ms` | correctness fail, nonfinite output |
 
-Once the FlashQLA-style producer is fixed, Section 11 should be updated by
+The July 1 revalidation tried a source-parity migration of the current-TL KKT
+producer. The smoke row passed, but the formal 64K/H16 row still failed. The
+direct diagnostic stayed producer-local: `g_cum` matched exactly, while
+current-TL `A` contained hundreds of nonfinite values and saturated near fp16
+limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
+
+Once the FlashQLA-style producer is fixed, the Neumann prepare section should be updated by
 replacing the `TBD` row with the measured full combined latency. That row will
 be the clean comparison against the `0.691642 ms` TileOps prepare-A row.
 Replay-only and component-sum diagnostics can remain in the evidence note, but
-they should not be the headline Section 11 claim.
+they should not be the headline A-producer claim.
 
 The V5/V6 adapter rows should be kept as supporting bridge evidence only. V5
 and V6 use the same CP downstream ABI and materialized A handoff shape/layout,
@@ -986,7 +1023,7 @@ therefore full-op correctness and compatibility under the same downstream
 contract, not equality of the intermediate A tensors and not a pure
 single-variable proof of the A mathematics.
 
-## 12. Productionization: Dispatch Is Part Of The Kernel
+### Productionization: Dispatch Is Part Of The Kernel
 
 After the search space changed, the remaining work was not just writing one
 fast kernel body. Production performance depended on choosing the right path
@@ -1070,7 +1107,12 @@ docker/runtime, dispatch heuristic, benchmark timer, GPU, or FlashQLA/FLA
 environment changes.
 ```
 
-## 13. Guardrail Lessons And Negative Results
+## Part V: Guardrails, Evidence Snapshot, And Takeaways
+
+The final part separates support evidence from headline evidence. Migration
+lessons, prefix-scan negative results, formal `64K/H16` rows, source caveats,
+and remaining publication blockers live here so the main Level 3 story does
+not accidentally overclaim.
 
 The main path is now clear: FlashQLA supplied the CP-split replay schedule,
 human analysis supplied the stronger A producer shape, and TileOps turned that
@@ -1078,7 +1120,7 @@ combination into an owned production path. Two side lessons are still worth
 keeping, but they belong after the main path because they are guardrails rather
 than the spine of the story.
 
-### 13.1 Source Similarity Is Not Performance Equality
+### Source Similarity Is Not Performance Equality
 
 Studying FlashQLA was not a mechanical copy-and-paste exercise. The first
 question was whether the same source-level skeleton preserved the same
@@ -1129,7 +1171,7 @@ Evidence shape:
 | source-equivalent `T.copy` migration | did not recover the intended TMA-specialized path in migration experiments | migration diagnostic |
 | explicit `T.tma_copy(..., barrier=...)` path | generated-code inspection showed the intended TMA path | migration diagnostic |
 
-### 13.2 Prefix Scan Was Valid But Too Heavy For This Shape
+### Prefix Scan Was Valid But Too Heavy For This Shape
 
 Before and after studying FlashQLA, we also explored whether replay could be
 parallelized through grouped transition composition or butterfly/prefix scan.
@@ -1193,7 +1235,7 @@ evidence.
 | fused direct replay + full summary | correct but about `2.2x` slower on `64K/H16` | historical negative result |
 | full `[b | M]` group sweep | `group_chunks=2/4/8/16` did not rescue the representation | historical negative result |
 
-## 14. Formal `64K/H16` Evidence Snapshot
+### Formal `64K/H16` Evidence Snapshot
 
 This section is the first formal evidence package for the rewrite, not the
 complete publication table. It refreshes the main evidence table for one scoped
@@ -1214,7 +1256,7 @@ The evidence has three lanes:
 | External/final anchors | FLA reference and production dispatch context. These rows are useful, but not experiment-adapter steps. |
 | Source / ABI caveats | The limits on what intermediate equality and version claims can say. |
 
-### 14.1 Experiment-Adapter Rows
+#### Experiment-Adapter Rows
 
 These rows are publication-eligible evidence rows and are marked
 `causal_ladder_eligible=true` in the harness output. That field name means they
@@ -1253,7 +1295,7 @@ between adopting a schedule idea and reproducing a finished kernel.
 The V5/V6 jump is supporting bridge evidence under the same downstream
 contract: replacing the conservative generic A producer with the
 blocked-inverse / Neumann-style A producer gives the faster V6 adapter row.
-This is not the main Section 11 causal proof and not a pure ablation of the
+This is not the main Neumann prepare causal proof and not a pure ablation of the
 math alone; the cleaner A-producer evidence is the A/replay cross-ablation.
 
 The missing FlashQLA-alignment node is not V5. It is the A/replay
@@ -1262,7 +1304,7 @@ cross-ablation: public FlashQLA producer plus TileOps replay gives a
 TileOps blocksolve A plus the same TileOps replay path gives `0.691642 ms`.
 
 This experiment-adapter table alone is not the complete FlashQLA attribution
-story. The A/replay cross-ablation in Section 14.4 adds the missing split: with
+story. The A/replay cross-ablation below adds the missing split: with
 public FlashQLA TL0.1.8 `A/g` fixed, TileOps replay reaches `0.542807 ms`, while
 the public FlashQLA replay anchor is `0.864754 ms`. That means the final story
 is not just "CP-split plus better A." On this tested shape, the TileOps-owned
@@ -1270,7 +1312,7 @@ replay/output implementation also contributes an independent speedup. The
 article should still avoid saying V5 is a faithful FlashQLA reproduction,
 because V5 is a generic-A bridge row rather than a public FlashQLA row.
 
-### 14.2 External And Final Anchors
+#### External And Final Anchors
 
 These rows should not be mixed into the experiment-adapter rows.
 
@@ -1299,7 +1341,7 @@ TileOps vs FlashQLA is a public-environment comparison, not a controlled
 same-lowering replay attribution experiment.
 ```
 
-### 14.3 Source, ABI, And Correctness Caveats
+#### Source, ABI, And Correctness Caveats
 
 The formal evidence package is clean enough for the scoped blog claim, but it
 should not be overstated.
@@ -1340,7 +1382,7 @@ correctness. But external FLA claims should say "recorded vendored FLA
 reference" unless the package identity is independently verified before
 publication.
 
-### 14.4 A/Replay Cross-Ablation
+#### A/Replay Cross-Ablation
 
 The first formal experiment-adapter table still left a real ambiguity: if
 TileOps learned the FlashQLA CP-split schedule, why did the generic-A CP row not
@@ -1413,7 +1455,7 @@ from the TL0.1.8 FlashQLA docker, while the TileOps replay number comes from
 the current TileOps harness. It is useful as a cross-ablation estimate, not as a
 replacement for a single public benchmark row.
 
-This is also why Section 11 should not use the `5.3912 ms -> 0.746707 ms`
+This is also why the Neumann prepare section should not use the `5.3912 ms -> 0.746707 ms`
 adapter jump as the main A-producer proof. The cleaner ablation is:
 
 ```text
@@ -1432,6 +1474,9 @@ That row is measurable but not correct at `64K/H16`: `default`, `legacy`, and
 localized to the current-TL KKT producer, since `g_cum` matches the TL0.1.8
 artifact while the current-TL `A` contains nonfinite/extreme values. Therefore
 the measured combined row is a rejected diagnostic, not a performance point.
+The July 1 source-parity and same-process TL0.1.8-source attempts did not
+produce a passing 64K/H16 combined row either, so the strict publication state
+is still `TBD` for that row.
 
 The supported narrative is therefore:
 
@@ -1442,7 +1487,7 @@ TileOps improved two implementation axes under that schedule family:
   2. the A producer via the blocked-inverse / Neumann-style path.
 ```
 
-### 14.5 What Still Needs A Broader Refresh
+#### What Still Needs A Broader Refresh
 
 The formal `64K/H16` package replaces the old mixed historical speed ladder as
 the main evidence spine. It does not replace every publication benchmark:
@@ -1454,7 +1499,7 @@ the main evidence spine. It does not replace every publication benchmark:
 | verified FLA package identity | needed before saying externally verified FLA 0.5.1 without caveat |
 | generated-code archive for TMA/WGMMA claims | needed before making low-level lowering claims |
 
-## 15. What The Case Study Shows
+### What The Case Study Shows
 
 In the formal `64K/H16` evidence snapshot, the scoped TileOps path is much
 faster than the recorded vendored FLA reference, but the more reusable result is
@@ -1496,7 +1541,7 @@ The scoped TileOps path improved because the work combined measurable agentic
 search, human mathematical judgment, expert open-source schedules, and
 production evidence discipline.
 
-## 16. Remaining Publication Blockers
+### Remaining Publication Blockers
 
 Before publication:
 
@@ -1506,9 +1551,10 @@ Before publication:
 2. Refresh broader-shape Tier-1 correctness and benchmark tables if the PR
    head, TileLang wheel, docker/runtime, dispatch heuristic, benchmark timer,
    GPU, or FlashQLA/FLA environment changes.
-3. Fill the Section 11 `TBD` row after the FlashQLA-style prepare-A producer is
+3. Fill the FlashQLA-style prepare-A `TBD` row after the producer is
    fixed. Until then, keep the component-sum rows in supporting diagnostics
-   rather than the main Section 11 claim.
+   rather than the main A-producer claim. The current root-cause note is
+   `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_combined_row_root_cause_20260701.md`.
 4. Keep the CP-split non-originality statement.
 5. Keep the hierarchical-prefix negative result scoped to the tested
    `DK=DV=128`, `chunk64` production path.
