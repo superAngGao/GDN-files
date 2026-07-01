@@ -1,12 +1,22 @@
 # Agentic TileLang Kernel Tuning: Gated DeltaNet Prefill
 
-Draft note: this is a working tutorial draft. The roadmap numbers have been
-refreshed from the current `64K/H16` evidence package and a five-shape
-production-surface sweep. Detailed evidence, rejected rows, ABI caveats, and
-benchmark metadata live in `tutorial_v3_si.md`. Figures are Mermaid placeholders
-for final publication graphics.
+Draft note: this is a working tutorial draft. Detailed evidence, rejected rows,
+ABI caveats, and benchmark metadata live in `tutorial_v3_si.md`. Figures are
+Mermaid placeholders for final publication graphics.
 
-## 0. Roadmap And Evidence Contract
+## 0. Problem, Result, And How To Read The Numbers
+
+Gated DeltaNet prefill is hard because it wants parallel throughput while
+carrying a recurrent key-value memory whose final state must match
+token-by-token decode. The kernel cannot only be fast; it must preserve the
+same causal state evolution across tens of thousands of tokens.
+
+The result of this case study is a TileOps-owned production prefill path that
+combines local agentic optimization, a FlashQLA-inspired CP-split replay
+schedule, and a human blocked-inverse / Neumann-style prepare algorithm. On the
+refreshed serving-shape sweep, the production dispatch path is faster than both
+the recorded FLA reference and the public FlashQLA TL0.1.8 anchor under the
+documented benchmark contracts.
 
 This is not a story about an AI magically inventing a faster GPU kernel. It is
 a story about how agents become useful when a kernel problem is made
@@ -62,42 +72,51 @@ The rewritten structure is:
 
 | Part | Purpose |
 | --- | --- |
-| 0. Roadmap and evidence contract | Define the claim boundaries, evidence lanes, and terminology. |
+| 0. Problem, result, and evidence contract | Define the problem, headline result, evidence lanes, and terminology. |
 | 1. Understanding the operator | Explain why GDN prefill is a recurrent-memory scheduling problem. |
 | 2. Make the operator measurable | Build correctness, benchmark, lowering, and decision gates. |
 | 3. Search local implementation choices | Show local AKO wins and the fixed-contract wall. |
 | 4. Expand the search space | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
 | 5. Guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
 
-Representative narrative roadmap:
+### 0.1 Representative Roadmap
 
 Relative performance is reported as throughput relative to a reference:
 `reference_latency / variant_latency * 100%`. `100%` means parity with the
 reference; values above `100%` mean the variant has higher throughput than the
-recorded FLA reference. This roadmap uses end-to-end rows only. Component
-diagnostics still appear in the body, but they do not enter the headline
-roadmap until they have a matching full-op row. The `64K/H16` formal rows use
-`B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, H200/GPU4, and the same input
-artifact hash:
-`sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`.
-The local-AKO rows below were rerun as end-to-end historical worktree
-checkpoints under this contract; component-only scale/store diagnostics are
-kept out of this headline table. The final production-surface row is a
-separate formal shape sweep on GPU3/H200, because its purpose is to show that
-the optimized path survives dispatch across the serving surface rather than
-only at one `64K/H16` point. The public-facing roadmap names story nodes, not
-internal variant IDs; the exact variant-to-code mapping is maintained in the
-supporting information and evidence inventory.
+recorded reference. Component diagnostics still appear in the body, but they do
+not enter the headline roadmap until they have a matching full-op row.
 
-| Story node | Blog meaning | Latency | Perf vs recorded FLA (%) | Perf vs public FlashQLA SOTA (%) |
+The single-shape story rows use the same formal `64K/H16` full-op harness:
+`B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`. The input artifact, GPU,
+commit, and timer details live in SI. The local-AKO rows below were rerun as
+end-to-end historical worktree checkpoints under this contract; component-only
+scale/store diagnostics are kept out of this headline table. The public-facing
+roadmap names story nodes, not internal variant IDs; the exact variant-to-code
+mapping is maintained in the supporting information and evidence inventory.
+
+**Controlled `64K/H16` story rows**
+
+| Story node | Blog meaning | Latency | Perf vs recorded FLA (%) | Perf vs public FlashQLA anchor (%) |
 | --- | --- | ---: | ---: | ---: |
 | initial correctness | the first serving prefill op is correct and measurable | `11.1762 ms` | `71.8%` | `11.7%` |
 | local prepare specialization | local AKO improves the fixed-contract path, but does not change replay depth | `10.8353 ms` | `74.1%` | `12.1%` |
 | local wall | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `5.5566 ms` | `144.4%` | `23.5%` |
-| <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`1.306838 ms`</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
-| FlashQLA-style A + TileOps replay | after studying FlashQLA, the improved TileOps replay/output path reaches the performance neighborhood before Neumann | `0.815029 ms` | `984.7%` | `160.3%` |
-| Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `0.715062 ms` | `1122.4%` | `182.8%` |
-| production dispatch surface | the optimized path becomes a dispatchable kernel family across shape space | `0.3723-2.3085 ms` | `822%-1330%` | `146%-291%` |
+| FlashQLA-style A + TileOps replay | after studying FlashQLA and improving replay/output, TileOps reaches the public FlashQLA performance neighborhood before Neumann | `0.815029 ms` | `984.7%` | `160.3%` |
+| Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm | `0.715062 ms` | `1122.4%` | `182.8%` |
+
+**External `64K/H16` anchors**
+
+| Anchor | Role | Latency | Perf vs recorded FLA (%) | Perf vs public FlashQLA anchor (%) |
+| --- | --- | ---: | ---: | ---: |
+| recorded FLA reference | behavioral correctness reference and FLA baseline | `8.02574 ms` | `100.0%` | `16.3%` |
+| public FlashQLA TL0.1.8 anchor | public environment anchor for the CP-split schedule family | `1.306838 ms` | `614.1%` public-env | `100.0%` |
+
+**Production dispatch surface**
+
+| Surface | Role | Latency range | Perf vs recorded FLA (%) | Perf vs public FlashQLA anchor (%) |
+| --- | --- | ---: | ---: | ---: |
+| five serving shapes | the optimized path becomes a dispatchable kernel family across shape space | `0.3723-2.3085 ms` | `822%-1330%` | `146%-291%` public-env |
 
 The local rerun also measured an h-tile diagnostic at `10.1631 ms`, but that row
 failed the formal `atol=rtol=5e-2` correctness gate, so it stays out of the
@@ -112,7 +131,7 @@ explicit publication blocker; it must not be read as a formal result.
 The final article should not mix component rows, external FlashQLA anchors, and
 TileOps experiment-adapter rows into one apparent speedup ladder.
 
-### 0.1 Terminology And Scope
+### 0.2 Terminology And Scope
 
 The final article will compare TileOps, FLA, and FlashQLA, but their roles are
 different:
@@ -192,10 +211,12 @@ article reaches FlashQLA's CP-split schedule.
 
 ### 1.1 GDN As A Recurrent Memory
 
-This section uses implementation-facing schematic notation. The exact
-orientation of row/column vectors and the exact gate exponent placement should
-be checked against the implementation before publication. The goal here is to
-explain the computation shape, not to provide final paper notation.
+This section uses implementation-facing schematic notation. It fixes the
+computation shape the reader needs for the rest of the article: recurrent
+memory read, gated decay, delta-style erase/write, chunk-local prepare, and
+cross-chunk replay. The implementation-scoped prepare formula appears later in
+Section 4.2, with the ABI caveat that different kernels may split gate and beta
+factors across the A producer and replay/output kernel.
 
 For one `(batch, head)` stream, the inputs are:
 
@@ -843,8 +864,10 @@ viewed as a blocked lower-triangular inverse/update problem:
 ```
 
 The useful mathematical object is the chunk-local lower-triangular correction
-matrix. For a chunk of length `C`, define a strictly lower-triangular
-interaction matrix:
+matrix. The following is an operator-level schematic for the TileOps
+implementation family, not a claim that every implementation materializes
+exactly this tensor with exactly this factor placement. For a chunk of length
+`C`, define a strictly lower-triangular interaction matrix:
 
 ```text
 M[i, j] = beta[i] * exp(g[i] - g[j]) * <k[i], k[j]>    if i > j
@@ -855,14 +878,18 @@ Then the effective writes have the shape:
 
 ```text
 A = (I + M)^(-1)
-W = A (diag(beta) K)
-U = A (diag(beta) V)
+R_K = beta-scaled keys under the chosen ABI
+R_V = beta-scaled values under the chosen ABI
+W = A R_K
+U = A R_V
 ```
 
 This is the notation to keep in the article: `A` is a left-multiply correction
-over the token axis. It turns raw beta-scaled keys and values into effective
+over the token axis. It turns raw ABI-scaled keys and values into effective
 writes that already include the causal delta-rule corrections within the
-chunk.
+chunk. The key interaction term `<k[i], k[j]>` is essential: without it, the
+formula would not represent the Gram-style erase/correction structure used by
+the prepare kernel.
 
 There is one implementation convention to state carefully. In the partitioned
 CP path, TileOps builds the materialized `A` with a zero gate input and passes
@@ -997,6 +1024,14 @@ comparison is `allclose=false` with `max_abs=0.117279`. The supported claim is
 therefore full-op correctness and compatibility under the same downstream
 contract, not equality of the intermediate A tensors and not a pure
 single-variable proof of the A mathematics.
+
+Short version of why that is acceptable: the publication claim is not
+"intermediate A tensors are identical." The claim is that each producer can feed
+the same downstream CP replay/output ABI and pass the same full-op correctness
+gate for `o` and final state. The dtype, tolerance, input distribution/artifact,
+and reference path are recorded in SI. The mismatch is still reported because
+it limits the attribution: V5/V6 are compatibility and end-to-end evidence,
+while the cleaner A-producer comparison is the measured full combined row above.
 
 ### 4.3 Productionization: From A Fast Kernel To A Dispatchable Kernel Family
 

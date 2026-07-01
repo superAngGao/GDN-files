@@ -41,14 +41,14 @@ evidence contracts and caveats moved into callouts or SI.
 
 ### P0 - Opening And Reader Mental Model
 
-- [ ] Rewrite the opening so the first screen gives:
+- [x] Rewrite the opening so the first screen gives:
       problem, result, and core insight.
-- [ ] Move dense evidence-management details out of the opening. Keep only a
+- [x] Move dense evidence-management details out of the opening. Keep only a
       short "How to read the numbers" callout after the reader understands the
       problem.
-- [ ] Avoid putting hash, GPU id, historical worktree, publication blocker, or
+- [x] Avoid putting hash, GPU id, historical worktree, publication blocker, or
       internal checkpoint language before the operator mental model.
-- [ ] Add an early one-sentence mental model:
+- [x] Add an early one-sentence mental model:
       GDN prefill is hard because it wants parallel throughput while preserving
       a recurrent KV memory that must match token-by-token decode.
 - [ ] Each major section should open with a result-oriented sentence, for
@@ -69,7 +69,7 @@ evidence contracts and caveats moved into callouts or SI.
       search-space change.
 - [ ] Keep V5 / first CP adaptation out of the headline roadmap; mention it only
       as process evidence in SI.
-- [ ] Replace "public FlashQLA SOTA" with "public FlashQLA TL0.1.8 anchor" or
+- [x] Replace "public FlashQLA SOTA" with "public FlashQLA TL0.1.8 anchor" or
       "public FlashQLA baseline" unless the article defines a strict SOTA
       benchmark scope.
 - [ ] Reduce repeated attribution disclaimers. Keep one strong CP-split
@@ -78,9 +78,9 @@ evidence contracts and caveats moved into callouts or SI.
 
 ### P0 - Benchmark Table Structure
 
-- [ ] Do not make one visual table look like a single causal speedup ladder if it
+- [x] Do not make one visual table look like a single causal speedup ladder if it
       mixes controlled rows, external anchors, and production-surface rows.
-- [ ] Split the current roadmap evidence into reader-friendly blocks:
+- [x] Split the current roadmap evidence into reader-friendly blocks:
       1. single-shape controlled narrative rows;
       2. public FLA / FlashQLA external anchors;
       3. production dispatch surface sweep.
@@ -93,26 +93,26 @@ evidence contracts and caveats moved into callouts or SI.
 ### P0 - Neumann / Blocked-Inverse Section
 
 - [ ] Review the math against the implementation one more time.
-- [ ] Distinguish schematic formulas from implementation-tied formulas.
+- [x] Distinguish schematic formulas from implementation-tied formulas.
 - [ ] Explain the problem it solves before presenting the block algorithm.
 - [ ] Make clear why this is a search-space change, not a local code tweak.
 - [ ] Preserve the caveat that TileOps does not claim materialized `A` equality
       with the generic exact/KKT-style producer.
-- [ ] Fix the publication-blocking formula in Section 4.2. In particular, the
+- [x] Fix the publication-blocking formula in Section 4.2. In particular, the
       schematic lower-triangular term currently written like
       `M[i, j] = beta[i] * exp(g[i] - g[j]) * ...` must include the missing key
       interaction / Gram term or be rewritten as intentionally schematic.
-- [ ] Remove or resolve any wording that says row/column orientation or gate
+- [x] Remove or resolve any wording that says row/column orientation or gate
       exponent placement "should be checked" before publication. Published text
       should either be implementation-verified or explicitly schematic.
 
 ### P0 - Intermediate A Mismatch Explanation
 
-- [ ] Add a main-text callout or short subsection:
+- [x] Add a main-text callout or short subsection:
       "Why intermediate A mismatch is acceptable here."
-- [ ] Explain that V5/V6 materialized `A` tensors are not claimed equivalent,
+- [x] Explain that V5/V6 materialized `A` tensors are not claimed equivalent,
       because the validated claim is full-op correctness under the chosen ABI.
-- [ ] State what is checked: output, final state, dtype, tolerance, input
+- [x] State what is checked: output, final state, dtype, tolerance, input
       distribution, and reference path.
 - [ ] Move detailed `A allclose=false`, max-abs, max-rel, and producer ABI facts
       to SI, but make the main text understandable enough that readers do not
