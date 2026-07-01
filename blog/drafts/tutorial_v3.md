@@ -102,7 +102,7 @@ only at one `64K/H16` point.
 | local wall | `local_bthd_wall_d09c = 5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` | N/A |
 | <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">public FlashQLA TL0.1.8 full `1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
 | FlashQLA-style A + TileOps replay | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | after studying FlashQLA, the improved TileOps replay/output path reaches the performance neighborhood before Neumann | `984.7%` | `160.3%` |
-| Neumann prepare | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `1122.4%` | `182.8%` |
+| Neumann prepare | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `1122.4%` | `182.8%` |
 | production dispatch surface | `tileops_final_dispatch`: `0.3723-2.3085 ms` over `32K-128K` and `H16-H64` | the optimized path becomes a dispatchable kernel family across shape space | `822%-1330%` | `146%-291%` |
 
 The local rerun also measured `local_h_tile_tuned_827 = 10.1631 ms`, but that
