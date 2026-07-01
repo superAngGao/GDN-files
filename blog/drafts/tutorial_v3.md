@@ -619,6 +619,12 @@ This was the Level 2 wall:
 less materialization != shorter recurrence
 ```
 
+End-to-end wall checkpoint:
+
+| Node | Accepted fixed-contract full-op evidence | `64K/H16` latency | Decision |
+| --- | --- | ---: | --- |
+| Level 2 wall | `generic_a_legacy`: generic A with legacy replay/output; direct/local fusion did not produce a better accepted long-context full-op row | `25.3849 ms` | stop local fusion as the main answer; change the replay search space |
+
 The rejected fusion candidates were useful because they clarified the boundary.
 Local fusion can improve the data path inside a schedule, but it does not
 automatically change the schedule's dependency structure. A fused kernel can
