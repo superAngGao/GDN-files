@@ -975,6 +975,12 @@ failed attempts are recorded only as diagnostics:
 | `FQ/TO` include producers | `legacy` | `1.958386 ms` | correctness fail, nonfinite output |
 | `FQ/TO` include producers | `wgmma` | `0.808363 ms` | correctness fail, nonfinite output |
 
+The July 1 revalidation tried a source-parity migration of the current-TL KKT
+producer. The smoke row passed, but the formal 64K/H16 row still failed. The
+direct diagnostic stayed producer-local: `g_cum` matched exactly, while
+current-TL `A` contained hundreds of nonfinite values and saturated near fp16
+limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
+
 Once the FlashQLA-style producer is fixed, the Neumann prepare section should be updated by
 replacing the `TBD` row with the measured full combined latency. That row will
 be the clean comparison against the `0.691642 ms` TileOps prepare-A row.
@@ -1440,6 +1446,9 @@ That row is measurable but not correct at `64K/H16`: `default`, `legacy`, and
 localized to the current-TL KKT producer, since `g_cum` matches the TL0.1.8
 artifact while the current-TL `A` contains nonfinite/extreme values. Therefore
 the measured combined row is a rejected diagnostic, not a performance point.
+The July 1 source-parity and same-process TL0.1.8-source attempts did not
+produce a passing 64K/H16 combined row either, so the strict publication state
+is still `TBD` for that row.
 
 The supported narrative is therefore:
 
@@ -1516,7 +1525,8 @@ Before publication:
    GPU, or FlashQLA/FLA environment changes.
 3. Fill the FlashQLA-style prepare-A `TBD` row after the producer is
    fixed. Until then, keep the component-sum rows in supporting diagnostics
-   rather than the main A-producer claim.
+   rather than the main A-producer claim. The current root-cause note is
+   `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_combined_row_root_cause_20260701.md`.
 4. Keep the CP-split non-originality statement.
 5. Keep the hierarchical-prefix negative result scoped to the tested
    `DK=DV=128`, `chunk64` production path.
