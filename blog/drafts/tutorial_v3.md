@@ -87,18 +87,25 @@ roadmap until they have a matching full-op row. The `64K/H16` formal rows use
 `B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, H200/GPU4, and the same input
 artifact hash:
 `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`.
+The local-AKO rows below were rerun as end-to-end historical worktree
+checkpoints under this contract; component-only scale/store diagnostics are
+kept out of this headline table.
 
 | Story node | Evidence scope | Representative end-to-end result | Blog meaning | Perf vs recorded FLA (%) |
 | --- | --- | ---: | --- | ---: |
-| initial correctness | formal full-op | `generic_a_legacy = 25.3849 ms` | the operator is correct and measurable, but the legacy replay/output path is slow | `73.9%` |
-| local wall | historical full-op diagnostic | direct fused no-CP skeleton `~4.15 ms` | fusion removes some materialization, but the long replay dependency remains | `~452%` historical / not same-run |
-| FlashQLA reference | external public full-op anchor | public FlashQLA TL0.1.8 full `1.306838 ms` | Qwen FlashQLA supplies the production CP-split schedule family | `~1435%` public-env |
-| FlashQLA-style A + TileOps replay | external-lowering full-op harness | TL0.1.8-lowering prepare + TileOps replay `0.812982 ms` | the schedule family reaches the expected performance neighborhood before Neumann | `~2307%` |
-| Neumann prepare | formal full-op | TileOps blocksolve A + TileOps replay `0.691642 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `~2712%` |
+| initial correctness | historical full-op, rerun | `local_initial_prefill_f147 = 11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` |
+| local prepare specialization | historical full-op, rerun | `local_prepare_specialized_00a60 = 10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` |
+| local wall | historical full-op, rerun | `local_bthd_wall_d09c = 5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` |
+| FlashQLA reference | external public full-op anchor | public FlashQLA TL0.1.8 full `1.306838 ms` | Qwen FlashQLA supplies the production CP-split schedule family | `614.1%` public-env |
+| FlashQLA-style A + TileOps replay | external-lowering full-op harness | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | the schedule family reaches the expected performance neighborhood before Neumann | `984.7%` |
+| Neumann prepare | formal full-op | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `1122.4%` |
+| final production dispatch | formal full-op | `tileops_final_dispatch = 0.692026 ms` | the production wrapper/dispatch path preserves the Neumann-family result | `1159.7%` |
 
-`tileops_final_dispatch = 0.722839 ms` is a production-wrapper anchor, not a
-post-Neumann improvement over the `0.691642 ms` experiment row. Keep it in the
-final/evidence section, not in the positive story ladder.
+The local rerun also measured `local_h_tile_tuned_827 = 10.1631 ms`, but that
+row failed the formal `atol=rtol=5e-2` correctness gate, so it stays out of the
+positive roadmap. `tileops_owned_cp_generic_a = 2.7674 ms` is also not a
+headline story node: it is the first correct CP adaptation after studying
+FlashQLA, useful as process evidence, but not performance-near FlashQLA.
 
 Component diagnostics, failed candidates, and migration/lowering anchors belong
 in the supporting evidence or appendix. A blocker row may appear only as an
@@ -619,13 +626,19 @@ End-to-end wall checkpoint:
 
 | Node | Accepted fixed-contract full-op evidence | `64K/H16` latency | Decision |
 | --- | --- | ---: | --- |
-| Level 2 wall | historical direct fused skeleton without CP split | `~4.15 ms` historical diagnostic | stop local fusion as the main answer; change the replay search space |
+| initial correct prefill | `local_initial_prefill_f147` historical worktree row | `11.1762 ms` | keep as the first measurable serving op |
+| local prepare specialization | `local_prepare_specialized_00a60` historical worktree row | `10.8353 ms` | local AKO gives a real full-op gain |
+| local wall | `local_bthd_wall_d09c` historical worktree row | `5.5566 ms` | local BTHD tuning helps, but replay remains a long fixed-contract path |
 
 The rejected fusion candidates were useful because they clarified the boundary.
 Local fusion can improve the data path inside a schedule, but it does not
 automatically change the schedule's dependency structure. A fused kernel can
 write fewer tensors and still be slow if it is replaying a long prefix as one
 chain.
+
+The same rerun measured `local_h_tile_tuned_827 = 10.1631 ms`, but it failed
+the formal correctness gate, so it remains diagnostic rather than a positive
+story row.
 
 This is the point where Level 2 runs out of room. The agent had improved
 local implementation choices and identified the bottleneck, but the next
@@ -784,13 +797,13 @@ experiment, not as a single pass/fail row.
 
 | Node | Evidence | Meaning |
 | --- | --- | --- |
-| local wall | direct fusion reduced some materialization but did not shorten the long replay chain; `generic_a_legacy` remained `25.3849 ms` on `64K/H16` | local AKO needed an external schedule idea |
-| first correct adaptation | V5 `tileops_owned_cp_generic_a = 5.3912 ms` | the FlashQLA CP idea had been adapted into TileOps, but the result was not performance-near FlashQLA |
-| no-Neumann prepare-A full row | TL0.1.8-lowering FlashQLA-style prepare A + TileOps replay/output full combined latency: `0.812982 ms` | the FlashQLA-style producer plus TileOps replay reaches the expected performance neighborhood |
+| local wall | local full-op rerun reached `local_bthd_wall_d09c = 5.5566 ms`, but the path still used long legacy replay | local AKO needed an external schedule idea |
+| first correct adaptation | V5 `tileops_owned_cp_generic_a = 2.7674 ms` | the FlashQLA CP idea had been adapted into TileOps, but the result was not performance-near FlashQLA |
+| no-Neumann prepare-A full row | TL0.1.8-lowering FlashQLA-style prepare A + TileOps replay/output full combined latency: `0.815029 ms` | the FlashQLA-style producer plus TileOps replay reaches the expected performance neighborhood |
 
 This third node is now filled with a measured external-lowering harness row.
 V5 was the first correct adaptation, not the finished schedule implementation.
-The `0.812982 ms` combined row shows how much of the gap is replay/output and
+The `0.815029 ms` combined row shows how much of the gap is replay/output and
 how much is prepare-A before switching to the stronger TileOps producer.
 
 That makes V5 useful rather than embarrassing. Its underperformance, together
@@ -954,8 +967,8 @@ Evidence note:
 | Row | Prepare-A producer | Replay/output | Timing scope | Correctness | `64K/H16` latency | Use |
 | --- | --- | --- | --- | --- | ---: | --- |
 | public FlashQLA full | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | pass / public anchor | `1.306838 ms` | external baseline |
-| FlashQLA-style prepare A + TileOps replay | TL0.1.8 lowered FlashQLA KKT via external launcher | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.812982 ms` | measured no-Neumann combined row |
-| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs recorded FLA | `0.691642 ms` | current measured TileOps row |
+| FlashQLA-style prepare A + TileOps replay | TL0.1.8 lowered FlashQLA KKT via external launcher | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.815029 ms` | measured no-Neumann combined row |
+| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.715062 ms` | same-scope measured TileOps row |
 
 The native current-TL FlashQLA-style KKT producer is still rejected at
 `64K/H16`, so the blog should not report its latency as performance evidence.
@@ -973,7 +986,7 @@ direct diagnostic stayed producer-local: `g_cum` matched exactly, while
 current-TL `A` contained hundreds of nonfinite values and saturated near fp16
 limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
 
-The filled no-Neumann row is the clean comparison against the `0.691642 ms`
+The filled no-Neumann row is the clean comparison against the `0.715062 ms`
 TileOps prepare-A row. Replay-only and component diagnostics can remain in the
 evidence note, but they should not be the headline A-producer claim. The caveat
 is that this row is an external TL0.1.8-lowering harness row, not a native
@@ -1059,8 +1072,8 @@ The current `64K/H16` formal harness also records the production-wrapper
 anchor:
 
 **Picked production candidate for this node:** `tileops_final_dispatch`,
-represented by the formal `64K/H16` full-op row at `0.722839 ms`. The explicit
-V6 adapter is `0.746707 ms`, so the final dispatch row is consistent with the
+represented by the formal `64K/H16` full-op row at `0.692026 ms`. The explicit
+V6 adapter is `0.715062 ms`, so the final dispatch row is consistent with the
 blocked-inverse CP path. This `1.03x` difference is a production wrapper /
 dispatch-context observation, not a new algorithmic step after the producer
 swap.
@@ -1232,14 +1245,14 @@ vendored FLA reference.
 
 | Role | Variant | Blog meaning | `64K/H16` latency | Speedup vs previous | Perf vs recorded FLA (%) |
 | --- | --- | --- | ---: | ---: | ---: |
-| baseline | `generic_a_legacy` | current-repo generic A producer plus legacy replay/output baseline | `25.3849 ms` | `1.00x` | `73.9%` |
-| first CP adaptation | `tileops_owned_cp_generic_a` | early CP-downstream bridge with a conservative generic A producer; useful control row, not a headline FlashQLA result | `5.3912 ms` | `4.71x` | `347.9%` |
-| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP downstream ABI, blocked-inverse / Neumann-style blocksolve A producer | `0.746707 ms` | `7.22x` | `2511.9%` |
+| baseline | `generic_a_legacy` | current-repo generic A producer plus legacy replay/output baseline | `11.1906 ms` | `1.00x` | `71.7%` |
+| first CP adaptation | `tileops_owned_cp_generic_a` | early CP-downstream bridge with a conservative generic A producer; useful control row, not a headline FlashQLA result | `2.7674 ms` | `4.04x` | `290.0%` |
+| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP downstream ABI, blocked-inverse / Neumann-style blocksolve A producer | `0.715062 ms` | `3.87x` | `1122.4%` |
 
 The end-to-end speedup across these experiment adapters is:
 
 ```text
-25.3849 ms / 0.746707 ms = 33.99x
+11.1906 ms / 0.715062 ms = 15.65x
 ```
 
 The experiment-adapter chain is:
@@ -1264,9 +1277,9 @@ math alone; the cleaner A-producer evidence is the A/replay cross-ablation.
 
 The FlashQLA-alignment node is not V5. It is the A/replay cross-ablation:
 TL0.1.8 lowered FlashQLA KKT injected through an external launcher plus
-TileOps replay gives a measured `0.812982 ms` full path, faster than refreshed
+TileOps replay gives a measured `0.815029 ms` full path, faster than refreshed
 public FlashQLA full `1.306838 ms`; then TileOps blocksolve A plus the same
-replay family gives `0.691642 ms`.
+replay family gives `0.715062 ms`.
 
 This experiment-adapter table alone is not the complete FlashQLA attribution
 story. The A/replay cross-ablation below adds the missing split: with
@@ -1284,19 +1297,18 @@ These rows should not be mixed into the experiment-adapter rows.
 
 | Variant | Role | `64K/H16` latency | Correctness | Use in blog |
 | --- | --- | ---: | --- | --- |
-| `ref_fla_051` | recorded vendored FLA reference baseline | `18.7565 ms` | self/reference row | correctness oracle and FLA latency context, with version caveat |
-| `tileops_final_dispatch` | PR1596 production wrapper / dispatch context | `0.722839 ms` | pass vs recorded FLA reference | final production-candidate row, not an experiment-adapter step |
+| `ref_fla_051` | recorded vendored FLA reference baseline | `8.02574 ms` | self/reference row | correctness oracle and FLA latency context, with version caveat |
+| `tileops_final_dispatch` | PR1596 production wrapper / dispatch context | `0.692026 ms` | pass vs recorded FLA reference | final production-candidate row, not an experiment-adapter step |
 
 The final dispatch row is slightly faster than the explicit V6 adapter:
 
 ```text
-0.746707 ms / 0.722839 ms = 1.03x
+0.715062 ms / 0.692026 ms = 1.03x
 ```
 
-But it is slower than the cleaner Section 11 TileOps prepare-A full row
-(`0.691642 ms`). Write `tileops_final_dispatch` as a production wrapper /
-dispatch-context observation, not as the fastest measured row and not as an
-additional algorithmic improvement after the blocked-inverse A producer.
+Write `tileops_final_dispatch` as a production wrapper / dispatch-context
+observation, not as an additional algorithmic improvement after the
+blocked-inverse A producer.
 
 FlashQLA remains the public schedule and performance reference. The refreshed
 public FlashQLA TL0.1.8 anchor for the same `64K/H16` shape is `1.306838 ms`
@@ -1363,18 +1375,21 @@ Evidence notes:
 `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_a_producer_ablation_64k_h16.md`
 and
 `experiments/gated_deltanet_prefill_blog_ladder/summaries/a_replay_cross_ablation_64k_h16.md`.
+The full external-lowering and Neumann rows use
+`benchmarks.benchmark_base.bench_kernel`; the machine-readable evidence is
+`experiments/gated_deltanet_prefill_blog_ladder/results/section11_tileops_benchmark_ext_lowering_vs_neumann_64k_h16.jsonl`.
 
 | Row | A producer | Replay/output path | Timing scope | Correctness reference | Latency |
 | --- | --- | --- | --- | --- | ---: |
 | `FQ/FQ` | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | public FlashQLA self row | `1.306838 ms` |
 | `FQ/FQ producer` | public FlashQLA TL0.1.8 KKT | producer-only row | `chunk_local_cumsum + kkt_solve` | component timing only | `0.471233 ms` |
 | `FQ/FQ replay` | exported public FlashQLA A/g | public FlashQLA TL0.1.8 CP replay | `cp_preprocess + fused_gdr_fwd` | component timing only | `0.860569 ms` |
-| `TL018-lowering/TO full` | TL0.1.8 lowered KKT via external launcher | TileOps PR1596 CP replay | full combined row | public TL0.1.8 artifact | `0.812982 ms` |
-| `TL018-lowering/TO prepare` | TL0.1.8 lowered KKT via external launcher | producer-only row | current `chunk_local_cumsum` + external `kkt_solve` | exact `A/g` vs public artifact | `0.270253 ms` |
+| `TL018-lowering/TO full` | TL0.1.8 lowered KKT via external launcher | TileOps PR1596 CP replay | full combined row | public TL0.1.8 artifact | `0.815029 ms` |
+| `TL018-lowering/TO prepare` | TL0.1.8 lowered KKT via external launcher | producer-only row | current `chunk_local_cumsum` + external `kkt_solve` | exact `A/g` vs public artifact | `0.470905 ms` |
 | `TL018-lowering/TO replay` | produced TL0.1.8-lowering A/g | TileOps PR1596 CP replay | replay-only | public TL0.1.8 artifact | `0.542159 ms` |
 | `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | `0.542807 ms` |
 | `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | `0.542905 ms` |
-| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | `0.691642 ms` |
+| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | public TL0.1.8 artifact | `0.715062 ms` |
 
 This changes the explanation. V5 should not be described as a faithful
 FlashQLA reproduction. It is a controlled bridge row that keeps a conservative
@@ -1406,19 +1421,20 @@ TileOps A + TileOps replay: 0.542905 ms
 So the replay/output improvement is not merely a side effect of changing the A
 producer.
 
-The A producer still matters. The measured TL0.1.8-lowering prepare row is
-faster than the refreshed public FlashQLA producer component:
+The A producer still matters. Under the TileOps benchmark harness, the measured
+TL0.1.8-lowering prepare row is essentially tied with, and very slightly faster
+than, the refreshed public FlashQLA producer component:
 
 ```text
-0.471233 ms / 0.270253 ms = 1.74x
+0.471233 ms / 0.470905 ms = 1.0007x
 ```
 
 The measured TL0.1.8-lowering full path is faster than public FlashQLA full
 path, but slower than the same-input TileOps full row:
 
 ```text
-1.306838 ms / 0.812982 ms = 1.61x
-0.812982 ms / 0.691642 ms = 1.18x
+1.306838 ms / 0.815029 ms = 1.60x
+0.815029 ms / 0.715062 ms = 1.14x
 ```
 
 That row is a measured single host-process path, but it is still an
@@ -1426,12 +1442,12 @@ external-lowering harness row rather than a production TileOps API row. It
 should be named precisely: TL0.1.8 lowered FlashQLA KKT via external launcher
 plus unchanged TileOps PR1596 replay.
 
-This is also why the Neumann prepare section should not use the `5.3912 ms -> 0.746707 ms`
+This is also why the Neumann prepare section should not use the `2.7674 ms -> 0.715062 ms`
 adapter jump as the main A-producer proof. The cleaner ablation is:
 
 ```text
-TL0.1.8-lowering prepare + TileOps replay: 0.812982 ms
-TileOps blocksolve producer + TileOps replay:       0.691642 ms
+TL0.1.8-lowering prepare + TileOps replay: 0.815029 ms
+TileOps blocksolve producer + TileOps replay:       0.715062 ms
 ```
 
 We also tried the native current-TL measured combined row:

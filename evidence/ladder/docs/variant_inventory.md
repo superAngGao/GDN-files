@@ -9,6 +9,10 @@ does not modify `tutorial_v3.md` and does not change production dispatch.
 
 | Variant | Lane | Publication role | Causal ladder eligible? | Current status | Decision |
 | --- | --- | --- | --- | --- | --- |
+| `local_initial_prefill_f147` | historical_full_op | historical_local_ladder_row | no | historical worktree adapter implemented; formal full-op correctness pass | accept as Level 2 story checkpoint |
+| `local_prepare_specialized_00a60` | historical_full_op | historical_local_ladder_row | no | historical worktree adapter implemented; formal full-op correctness pass | accept as Level 2 story checkpoint |
+| `local_h_tile_tuned_827` | historical_full_op | historical_local_ladder_row | no | historical worktree adapter implemented; formal full-op correctness fail | diagnostic_only |
+| `local_bthd_wall_d09c` | historical_full_op | historical_local_wall_row | no | historical worktree adapter implemented; formal full-op correctness pass | accept as Level 2 wall row |
 | `generic_a_legacy` | controlled_full_op | causal_ladder_row | yes | implemented in current repo as `GatedDeltaNetFwdOp` | accept for rerun |
 | `generic_a_local_ako_best` | conditional_full_op | conditional_causal_ladder_row | no | historical traces exist, no clean current selectable full-op adapter found | unavailable |
 | `generic_a_direct_fused_correct` | conditional_full_op | conditional_boundary_diagnostic | no | no clean correct full-op implementation found | unavailable |
@@ -20,6 +24,32 @@ does not modify `tutorial_v3.md` and does not change production dispatch.
 | `tileops_final_dispatch` | controlled_full_op | final_candidate | no | runnable from `/home/ga/TileOPs-pr1596` as current production candidate | accept as final/current candidate |
 
 ## Audit Notes
+
+### Historical local full-op checkpoints
+
+Status: implemented as detached worktree adapters.
+
+These variants were added after the blog roadmap was tightened to use only
+end-to-end rows.  They are not controlled V5/V6 producer-swap rows; they are
+Level 2 story checkpoints before FlashQLA is introduced.
+
+Formal `64K/H16`, GPU4/H200, same input artifact:
+
+| Variant | Commit | Correctness | Latency ms | Use |
+| --- | --- | --- | ---: | --- |
+| `local_initial_prefill_f147` | `f1472392` | pass | `11.1762` | first measurable serving prefill op |
+| `local_prepare_specialized_00a60` | `00a60b19` | pass | `10.8353` | local prepare specialization full-op node |
+| `local_h_tile_tuned_827` | `82707454` | fail | `10.1631` | diagnostic only |
+| `local_bthd_wall_d09c` | `d09c8f2d` | pass | `5.5566` | Level 2 local wall row |
+
+Source roots:
+
+```text
+/home/ga/TileOPs-gdn-history/initial-f1472392
+/home/ga/TileOPs-gdn-history/prepare-00a60b19
+/home/ga/TileOPs-gdn-history/htile-82707454
+/home/ga/TileOPs-gdn-history/bthdwall-d09c8f2d
+```
 
 ### `generic_a_legacy`
 
