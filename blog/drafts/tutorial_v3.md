@@ -76,43 +76,33 @@ The rewritten structure is:
 | Part IV: Level 3 | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
 | Part V: guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
 
-Representative full-op roadmap:
+Representative narrative roadmap:
 
 Relative performance is reported as throughput relative to a reference:
 `reference_latency / variant_latency * 100%`. `100%` means parity with the
 reference; values above `100%` mean the variant has higher throughput than that
-reference. The formal row below uses
+reference. Rows marked "diagnostic only" are not performance claims; they mark
+where the search changed direction. The measured rows below use
 `B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, H200/GPU4, and the same input
 artifact hash:
 `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`.
 
-| Role | Variant | Schedule / A producer | Blog meaning | `64K/H16` latency | Perf vs recorded FLA (%) |
-| --- | --- | --- | --- | ---: | ---: |
-| baseline | `generic_a_legacy` | legacy replay/output, generic A | starting point after correctness gates | `25.3849 ms` | `73.9%` |
-| first CP adaptation | `tileops_owned_cp_generic_a` | early TileOps CP downstream adapter, conservative generic A | first correct TileOps-owned result after studying FlashQLA; useful, but still not performance-near FlashQLA | `5.3912 ms` | `347.9%` |
-| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP split, blocked-inverse / Neumann-style A | bridge evidence for the A-producer implementation; the Neumann prepare section uses the full prepare-A comparison for causality | `0.746707 ms` | `2511.9%` |
-| final anchor | `tileops_final_dispatch` | shape-aware production dispatch | final production wrapper / dispatch context, not an experiment-adapter step | `0.722839 ms` | `2594.8%` |
+| Story node | Evidence | Blog meaning | `64K/H16` latency | Perf vs recorded FLA (%) |
+| --- | --- | --- | ---: | ---: |
+| measurable baseline | `generic_a_legacy` | the operator is correct and measurable, but the legacy replay/output path is slow | `25.3849 ms` | `73.9%` |
+| Level 2 wall | direct-fusion and local-fusion diagnostics | local AKO can remove some stores, but it does not shorten the long replay dependency | diagnostic only | not reported |
+| Level 3 search-space expansion | FlashQLA CP-split schedule + human blocked-inverse / Neumann prepare | external input changes the schedule and the A producer search space | details later | details later |
+| final scoped TileOps row | `tileops_final_dispatch` | production wrapper / dispatch context for the current scoped candidate | `0.722839 ms` | `2594.8%` |
 
-The experiment-adapter chain is:
+The detailed experiment-adapter chain appears later in the evidence section.
+Do not use that adapter chain as the opening story. The opening should first
+establish the wall; the intermediate CP adaptation rows only make sense after
+the FlashQLA section has explained the external schedule idea.
 
-```text
-generic_a_legacy
-  -> tileops_owned_cp_generic_a
-  -> tileops_owned_cp_blocked_inverse_a
-```
-
-Do not insert `tileops_final_dispatch` into that chain. It is a final
-candidate / production-wrapper anchor, not a separate algorithmic step. Also do
-not make V5 a headline "we matched FlashQLA" milestone: it is the first correct
-TileOps-owned adaptation after studying the FlashQLA schedule family.
-
-The FlashQLA-learning sequence is a separate experiment lane:
-
-| Node | Evidence | Meaning |
-| --- | --- | --- |
-| wall | direct fusion reduced some materialization but did not shorten the long replay dependency | local AKO hit a schedule wall |
-| first correct adaptation | `tileops_owned_cp_generic_a = 5.3912 ms` | the FlashQLA CP idea was adapted into TileOps, but the implementation was not yet performance-near FlashQLA |
-| pending prepare-A full row | FlashQLA-style prepare A + TileOps replay/output full combined latency: `TBD` after producer fix | this will be the clean comparison against the TileOps prepare-A full row |
+The FlashQLA-learning sequence is intentionally not introduced here. The
+opening should first establish the wall. The later FlashQLA section then
+explains how the external schedule idea was studied, adapted, and separated
+from the prepare-A question.
 
 Component diagnostics, failed candidates, and migration/lowering anchors belong
 in the supporting evidence or appendix. A `TBD` row may appear only as an
