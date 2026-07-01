@@ -77,7 +77,7 @@ The rewritten structure is:
 | 2. Make the operator measurable | Build correctness, benchmark, lowering, and decision gates. |
 | 3. Search local implementation choices | Show local AKO wins and the fixed-contract wall. |
 | 4. Expand the search space | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
-| 5. Guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
+| 5. Guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and open evidence items. |
 
 ### 0.1 Representative Roadmap
 
@@ -125,8 +125,8 @@ positive roadmap. The first correct CP adaptation after studying FlashQLA was
 FlashQLA, so it also stays out of the headline roadmap.
 
 Component diagnostics, failed candidates, and migration/lowering anchors belong
-in the supporting evidence or appendix. A blocker row may appear only as an
-explicit publication blocker; it must not be read as a formal result.
+in the supporting evidence or appendix. A rejected or unresolved row may appear
+only as diagnostic context; it must not be read as a formal result.
 
 The final article should not mix component rows, external FlashQLA anchors, and
 TileOps experiment-adapter rows into one apparent speedup ladder.
@@ -927,8 +927,8 @@ diagonal inverses with a Neumann-style update, and composes the off-diagonal
 blocks with a fixed sequence of small GEMMs in shared memory. The accepted
 variant should therefore be described as a **blocked-inverse /
 Neumann-style A producer**, not as a proof that the materialized `A` is
-identical to the generic exact/KKT-style producer. The formal evidence records
-`A allclose=false`; full-op correctness is what is validated.
+identical to the generic exact/KKT-style producer. Direct intermediate-`A`
+comparison details stay in SI; full-op correctness is what is validated.
 
 Figure 9 shows the shape.
 
@@ -1019,11 +1019,10 @@ current-TL KKT port.
 
 The V5/V6 adapter rows should be kept as supporting bridge evidence only. V5
 and V6 use the same CP downstream ABI and materialized A handoff shape/layout,
-but they do not produce numerically equivalent A tensors. The recorded A
-comparison is `allclose=false` with `max_abs=0.117279`. The supported claim is
-therefore full-op correctness and compatibility under the same downstream
-contract, not equality of the intermediate A tensors and not a pure
-single-variable proof of the A mathematics.
+but they do not claim numerically equivalent intermediate A tensors. The
+supported claim is therefore full-op correctness and compatibility under the
+same downstream contract, not equality of the intermediate A tensors and not a
+pure single-variable proof of the A mathematics.
 
 Short version of why that is acceptable: the publication claim is not
 "intermediate A tensors are identical." The claim is that each producer can feed

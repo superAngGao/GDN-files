@@ -114,7 +114,7 @@ evidence contracts and caveats moved into callouts or SI.
       because the validated claim is full-op correctness under the chosen ABI.
 - [x] State what is checked: output, final state, dtype, tolerance, input
       distribution, and reference path.
-- [ ] Move detailed `A allclose=false`, max-abs, max-rel, and producer ABI facts
+- [x] Move detailed `A allclose=false`, max-abs, max-rel, and producer ABI facts
       to SI, but make the main text understandable enough that readers do not
       suspect tolerance is hiding an error.
 
