@@ -97,15 +97,15 @@ only at one `64K/H16` point. The public-facing roadmap names story nodes, not
 internal variant IDs; the exact variant-to-code mapping is maintained in the
 supporting information and evidence inventory.
 
-| Story node | Representative end-to-end result | Blog meaning | Perf vs recorded FLA (%) | Perf vs public FlashQLA (%) |
+| Story node | Latency | Blog meaning | Perf vs recorded FLA (%) | Perf vs public FlashQLA (%) |
 | --- | ---: | --- | ---: | ---: |
-| initial correctness | first correct full-op checkpoint: `11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` | N/A |
-| local prepare specialization | local prepare-specialized full op: `10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` | N/A |
-| local wall | best local fixed-contract full op: `5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` | N/A |
-| <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">public FlashQLA TL0.1.8 full `1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
-| FlashQLA-style A + TileOps replay | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | after studying FlashQLA, the improved TileOps replay/output path reaches the performance neighborhood before Neumann | `984.7%` | `160.3%` |
-| Neumann prepare | blocked-inverse / Neumann-style full op: `0.715062 ms` | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `1122.4%` | `182.8%` |
-| production dispatch surface | production dispatch sweep: `0.3723-2.3085 ms` over `32K-128K` and `H16-H64` | the optimized path becomes a dispatchable kernel family across shape space | `822%-1330%` | `146%-291%` |
+| initial correctness | `11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` | N/A |
+| local prepare specialization | `10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` | N/A |
+| local wall | `5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` | N/A |
+| <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">`1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
+| FlashQLA-style A + TileOps replay | `0.815029 ms` | after studying FlashQLA, the improved TileOps replay/output path reaches the performance neighborhood before Neumann | `984.7%` | `160.3%` |
+| Neumann prepare | `0.715062 ms` | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `1122.4%` | `182.8%` |
+| production dispatch surface | `0.3723-2.3085 ms` | the optimized path becomes a dispatchable kernel family across shape space | `822%-1330%` | `146%-291%` |
 
 The local rerun also measured an h-tile diagnostic at `10.1631 ms`, but that row
 failed the formal `atol=rtol=5e-2` correctness gate, so it stays out of the
