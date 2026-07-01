@@ -629,44 +629,16 @@ This was the Level 2 wall:
 less materialization != shorter recurrence
 ```
 
-Later formal evidence:
-
-**Picked decision for this node:** reject direct fusion as the main long-context
-answer and move to CP-split replay. A later formal `64K/H16` intermediate row,
-`tileops_owned_cp_generic_a`, pairs a TileOps-owned CP downstream adapter with a
-conservative generic A producer. It drops full-op latency from `25.3849 ms` to
-`5.3912 ms`, which confirms that leaving the legacy replay/output path mattered.
-But because the row is still far from the FlashQLA performance neighborhood, it
-should be described as the first correct TileOps-owned adaptation after
-studying FlashQLA, not as a successful reproduction of FlashQLA.
-
-| Candidate | What changed | `64K/H16` latency | Scope |
-| --- | --- | ---: | --- |
-| `generic_a_legacy` | generic A with legacy replay/output | `25.3849 ms` | controlled starting point |
-| `tileops_owned_cp_generic_a` | TileOps-owned CP downstream adapter and fused replay/output with a conservative generic A producer | `5.3912 ms` | first correct CP adaptation, not FlashQLA reproduction |
-
-This is evidence for the Level 2 wall and for the need to change the replay
-search space. It is not evidence that V5 reached FlashQLA's production schedule
-quality. The clean comparison should come from the later full combined row:
-FlashQLA-style prepare A feeding TileOps replay/output. That row is still
-`TBD` until the current-TL FlashQLA-style producer is fixed; replay-only
-diagnostics stay in the evidence note.
-
-The failed and rejected candidates were useful because they clarified the
-boundary. Local fusion can improve the data path inside a schedule, but it
-does not automatically change the schedule's dependency structure. A full-DV
-or TMA-looking fused kernel can still be slow if it is replaying a long prefix
-serially.
+The rejected fusion candidates were useful because they clarified the boundary.
+Local fusion can improve the data path inside a schedule, but it does not
+automatically change the schedule's dependency structure. A fused kernel can
+write fewer tensors and still be slow if it is replaying a long prefix as one
+chain.
 
 This is the point where Level 2 runs out of room. The agent had improved
 local implementation choices and identified the bottleneck, but the next
-performance jump needed a different search space:
-
-- a new long-replay schedule, supplied by Qwen FlashQLA's CP-split design;
-- a stronger prepare producer shape, supplied by human blocked inverse /
-  Neumann-style analysis.
-
-Those are Level 3 topics.
+performance jump needed a different search space. That is where Level 3
+begins.
 
 ## Part IV: Level 3 - External Input Changes The Search Space
 
@@ -1002,12 +974,6 @@ failed attempts are recorded only as diagnostics:
 | `FQ/TO` include producers | `default` | `0.811018 ms` | correctness fail, nonfinite output |
 | `FQ/TO` include producers | `legacy` | `1.958386 ms` | correctness fail, nonfinite output |
 | `FQ/TO` include producers | `wgmma` | `0.808363 ms` | correctness fail, nonfinite output |
-
-The July 1 revalidation tried a source-parity migration of the current-TL KKT
-producer. The smoke row passed, but the formal 64K/H16 row still failed. The
-direct diagnostic stayed producer-local: `g_cum` matched exactly, while
-current-TL `A` contained hundreds of nonfinite values and saturated near fp16
-limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
 
 Once the FlashQLA-style producer is fixed, the Neumann prepare section should be updated by
 replacing the `TBD` row with the measured full combined latency. That row will
@@ -1474,9 +1440,6 @@ That row is measurable but not correct at `64K/H16`: `default`, `legacy`, and
 localized to the current-TL KKT producer, since `g_cum` matches the TL0.1.8
 artifact while the current-TL `A` contains nonfinite/extreme values. Therefore
 the measured combined row is a rejected diagnostic, not a performance point.
-The July 1 source-parity and same-process TL0.1.8-source attempts did not
-produce a passing 64K/H16 combined row either, so the strict publication state
-is still `TBD` for that row.
 
 The supported narrative is therefore:
 
@@ -1553,8 +1516,7 @@ Before publication:
    GPU, or FlashQLA/FLA environment changes.
 3. Fill the FlashQLA-style prepare-A `TBD` row after the producer is
    fixed. Until then, keep the component-sum rows in supporting diagnostics
-   rather than the main A-producer claim. The current root-cause note is
-   `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_combined_row_root_cause_20260701.md`.
+   rather than the main A-producer claim.
 4. Keep the CP-split non-originality statement.
 5. Keep the hierarchical-prefix negative result scoped to the tested
    `DK=DV=128`, `chunk64` production path.
