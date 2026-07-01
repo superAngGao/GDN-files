@@ -5,9 +5,10 @@ Level 1, Level 2, Level 3, and the first formal `64K/H16` evidence package.
 
 Publication status: not final. The `64K/H16` evidence package has been
 refreshed under a formal harness, including a public FlashQLA TL0.1.8 anchor
-for that shape. Broader-shape tables, public-environment percentage tables, FLA
-package identity, and final formula copyediting still need publication review.
-The Neumann/blocksolve section now uses implementation-scoped notation and must
+for that shape. The production-surface sweep has also been refreshed for five
+serving shapes. Public-environment percentage framing, FLA package identity,
+and final formula copyediting still need publication review. The
+Neumann/blocksolve section now uses implementation-scoped notation and must
 keep its ABI caveats.
 
 Figure note: figures below are Mermaid placeholders for final publication
@@ -89,17 +90,20 @@ artifact hash:
 `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`.
 The local-AKO rows below were rerun as end-to-end historical worktree
 checkpoints under this contract; component-only scale/store diagnostics are
-kept out of this headline table.
+kept out of this headline table. The final production-surface row is a
+separate formal shape sweep on GPU3/H200, because its purpose is to show that
+the optimized path survives dispatch across the serving surface rather than
+only at one `64K/H16` point.
 
-| Story node | Evidence scope | Representative end-to-end result | Blog meaning | Perf vs recorded FLA (%) |
-| --- | --- | ---: | --- | ---: |
-| initial correctness | historical full-op, rerun | `local_initial_prefill_f147 = 11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` |
-| local prepare specialization | historical full-op, rerun | `local_prepare_specialized_00a60 = 10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` |
-| local wall | historical full-op, rerun | `local_bthd_wall_d09c = 5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` |
-| <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">external public full-op anchor</span> | <span style="color:#8a8f98">public FlashQLA TL0.1.8 full `1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> |
-| FlashQLA-style A + TileOps replay | external-lowering full-op harness | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | the schedule family reaches the expected performance neighborhood before Neumann | `984.7%` |
-| Neumann prepare | formal full-op | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `1122.4%` |
-| final production dispatch | formal full-op | `tileops_final_dispatch = 0.692026 ms` | the production wrapper/dispatch path preserves the Neumann-family result | `1159.7%` |
+| Story node | Evidence scope | Representative end-to-end result | Blog meaning | Perf vs recorded FLA (%) | Perf vs public FlashQLA (%) |
+| --- | --- | ---: | --- | ---: | ---: |
+| initial correctness | historical full-op, rerun | `local_initial_prefill_f147 = 11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` | N/A |
+| local prepare specialization | historical full-op, rerun | `local_prepare_specialized_00a60 = 10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` | N/A |
+| local wall | historical full-op, rerun | `local_bthd_wall_d09c = 5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` | N/A |
+| <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">external public full-op anchor</span> | <span style="color:#8a8f98">public FlashQLA TL0.1.8 full `1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
+| FlashQLA-style A + TileOps replay | external-lowering full-op harness | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | the schedule family reaches the expected performance neighborhood before Neumann | `984.7%` | `160.3%` |
+| Neumann prepare | formal full-op | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `1122.4%` | `182.8%` |
+| production dispatch surface | formal five-shape sweep | `tileops_final_dispatch`: `0.3723-2.3085 ms` over `32K-128K` and `H16-H64` | the optimized path becomes a dispatchable kernel family across shape space | `822%-1330%` | `146%-291%` |
 
 The local rerun also measured `local_h_tile_tuned_827 = 10.1631 ms`, but that
 row failed the formal `atol=rtol=5e-2` correctness gate, so it stays out of the
@@ -564,7 +568,11 @@ evidence.
 historical TileLang component latency improving from `0.46791766 ms` to
 `0.27223574 ms`.
 
-| Candidate | Correctness | TileLang latency | Same-run Triton | Lesson |
+**Component microbenchmark: prepare store path only.** These rows compare one
+historical prepare subcomponent, not the end-to-end GDN prefill path used in
+the main ladder tables.
+
+| Candidate | Correctness | TileLang component latency | Same-run Triton component | Lesson |
 | --- | --- | ---: | ---: | --- |
 | copy baseline | exact | `0.46791766 ms` | `0.30507803 ms` | correct but far behind Triton |
 | no-store diagnostic | skipped by design | `0.13233657 ms` | `0.30706382 ms` | compute path was not the bottleneck |
@@ -972,13 +980,9 @@ Evidence note:
 
 The native current-TL FlashQLA-style KKT producer is still rejected at
 `64K/H16`, so the blog should not report its latency as performance evidence.
-Those failed attempts remain diagnostics:
-
-| Attempt | GEMM mode | Observed latency | Why not used |
-| --- | --- | ---: | --- |
-| `FQ/TO` include producers | `default` | `0.811018 ms` | correctness fail, nonfinite output |
-| `FQ/TO` include producers | `legacy` | `1.958386 ms` | correctness fail, nonfinite output |
-| `FQ/TO` include producers | `wgmma` | `0.808363 ms` | correctness fail, nonfinite output |
+Those failed attempts remain diagnostics in the evidence files only; their
+latencies are not reported because failed-correctness timings are not
+performance evidence.
 
 The July 1 revalidation tried a source-parity migration of the current-TL KKT
 producer. The smoke row passed, but the formal 64K/H16 row still failed. The
@@ -1000,55 +1004,26 @@ therefore full-op correctness and compatibility under the same downstream
 contract, not equality of the intermediate A tensors and not a pure
 single-variable proof of the A mathematics.
 
-### 4.3 Productionization: Dispatch Is Part Of The Kernel
+### 4.3 Productionization: From One Fast Kernel To A Dispatch Surface
 
-After the search space changed, the remaining work was not just writing one
-fast kernel body. Production performance depended on choosing the right path
-for the shape and recording enough metadata to make comparisons meaningful.
+After the blocked-inverse prepare landed, the next optimization target was no
+longer one more algebraic trick on the `64K/H16` kernel. It was the production
+surface: can the same optimized mechanism be selected, parameterized, validated,
+and timed across the shapes a serving system actually routes through?
 
-TileOps' productionization work includes:
+That is a different kind of optimization. A point kernel proves that the
+mechanism can be fast. A production dispatch surface proves that the mechanism
+survives shape changes, head-count changes, and wrapper policy without falling
+back to a slow or incorrect path. TileOps' productionization work therefore
+included:
 
 - owned BTHD kernels rather than depending on an external FlashQLA call path;
-- TileOps' A producer combined with the CP-split replay schedule;
-- CP parameter tuning;
+- TileOps' blocked-inverse A producer combined with the CP-split replay
+  schedule;
+- shape-aware CP parameters such as segment count and `max_local_chunks`;
 - H64 dispatch correction;
-- correctness validation against FLA;
+- correctness validation against the recorded FLA reference;
 - benchmark metadata that records the actual dispatch path.
-
-The dispatch metadata is part of the evidence:
-
-```python
-meta = resolve_gdn_prefill_dispatch(
-    B=B,
-    T=T,
-    H=H,
-    DK=DK,
-    DV=DV,
-    dtype=dtype,
-    layout="BTHD",
-)
-
-kernel = select_prefill_kernel(
-    use_cp=meta.use_cp,
-    max_local_chunks=meta.max_local_chunks,
-    block_DV=meta.block_DV,
-)
-
-record_benchmark_metadata({
-    "max_local_chunks": meta.max_local_chunks,
-    "cp_segments": meta.cp_segments,
-    "block_DV": meta.block_DV,
-    "tileops_tilelang_version": tileops_tilelang_version,
-    "tileops_commit": tileops_commit,
-    "flashqla_env": flashqla_env,
-    "fla_version": fla_version,
-    "gpu": gpu_name,
-    "timer": timer_config,
-    "dtype": dtype,
-    "layout": "BTHD",
-    "seed": seed,
-})
-```
 
 Figure 10 shows the routing shape.
 
@@ -1056,27 +1031,35 @@ Figure 10 shows the routing shape.
 flowchart LR
     Shape["B,T,H,DK,DV<br/>dtype, layout"]
     Policy["dispatch policy"]
-    Params["use_cp<br/>max_local_chunks<br/>block_DV"]
+    Params["use_cp<br/>max_local_chunks<br/>cp_segments"]
     Kernel["selected TileOps kernel"]
     Metadata["benchmark metadata"]
 
     Shape --> Policy --> Params --> Kernel --> Metadata
 ```
 
-This is where the final article must be strict. Any public FlashQLA comparison
-row should carry the relevant metadata: CP segment count, `max_local_chunks`,
-`block_DV`, TileLang version, TileOps commit, FlashQLA environment, FLA
-version, GPU, timer configuration, dtype, layout, and seed.
+The table below is the production-surface check, not another single-step row in
+the `64K/H16` algorithm ladder. All TileOps and FLA rows use the TileOps
+benchmark infrastructure on GPU3/H200 with `B=1,DK=DV=128,chunk64,fp16,BTHD`,
+`warmup=5,repeat=20,trials=3`, and correctness checked against the recorded FLA
+reference. FlashQLA rows are public TL0.1.8 Docker measurements under the same
+shape/timer settings; they remain a public-environment comparison, not a
+same-lowering attribution experiment.
 
-The current `64K/H16` formal harness also records the production-wrapper
-anchor:
+| Shape | TileOps production dispatch | Recorded FLA reference | Public FlashQLA TL0.1.8 | TileOps vs FLA (%) | TileOps vs FlashQLA (%) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `32K/H16` | `0.3723 ms` | `3.7964 ms` | `0.5440 ms` | `1020%` | `146%` |
+| `64K/H16` | `0.6951 ms` | `7.9840 ms` | `1.3073 ms` | `1149%` | `188%` |
+| `128K/H16` | `1.2284 ms` | `16.3385 ms` | `2.6055 ms` | `1330%` | `212%` |
+| `64K/H32` | `1.2238 ms` | `10.2402 ms` | `2.5942 ms` | `837%` | `212%` |
+| `64K/H64` | `2.3085 ms` | `18.9782 ms` | `6.7233 ms` | `822%` | `291%` |
 
-**Picked production candidate for this node:** `tileops_final_dispatch`,
-represented by the formal `64K/H16` full-op row at `0.692026 ms`. The explicit
-V6 adapter is `0.715062 ms`, so the final dispatch row is consistent with the
-blocked-inverse CP path. This `1.03x` difference is a production wrapper /
-dispatch-context observation, not a new algorithmic step after the producer
-swap.
+This table is the more meaningful production claim. The explicit `64K/H16` V6
+adapter row and the `tileops_final_dispatch` wrapper row remain useful
+cross-checks, but the small wrapper delta is not a new algorithmic step. The
+important result is that the blocked-inverse CP path has become a dispatchable
+family whose selected rows pass correctness and stay ahead across this measured
+surface.
 
 ```text
 Rerun Tier-1 correctness and benchmark tables if the PR head, TileLang wheel,
@@ -1293,14 +1276,17 @@ because V5 is a generic-A bridge row rather than a public FlashQLA row.
 
 #### 5.3.2 External And Final Anchors
 
-These rows should not be mixed into the experiment-adapter rows.
+These rows should not be mixed into the experiment-adapter rows. The
+`64K/H16` dispatch row is still useful as an anchor, but Section 4.3 should use
+the broader production-surface sweep as the production claim.
 
 | Variant | Role | `64K/H16` latency | Correctness | Use in blog |
 | --- | --- | ---: | --- | --- |
 | `ref_fla_051` | recorded vendored FLA reference baseline | `8.02574 ms` | self/reference row | correctness oracle and FLA latency context, with version caveat |
-| `tileops_final_dispatch` | PR1596 production wrapper / dispatch context | `0.692026 ms` | pass vs recorded FLA reference | final production-candidate row, not an experiment-adapter step |
+| `tileops_final_dispatch` | PR1596 production wrapper / dispatch context | `0.692026 ms` historical anchor; `0.6951 ms` in the refreshed surface sweep | pass vs recorded FLA reference | production-surface row family, not an experiment-adapter step |
 
-The final dispatch row is slightly faster than the explicit V6 adapter:
+The historical final dispatch anchor was slightly faster than the explicit V6
+adapter:
 
 ```text
 0.715062 ms / 0.692026 ms = 1.03x
@@ -1308,11 +1294,16 @@ The final dispatch row is slightly faster than the explicit V6 adapter:
 
 Write `tileops_final_dispatch` as a production wrapper / dispatch-context
 observation, not as an additional algorithmic improvement after the
-blocked-inverse A producer.
+blocked-inverse A producer. The stronger main-text statement is the refreshed
+shape sweep:
+`evidence/ladder/results/production_surface_tileops_vs_fla_20260701_tmpdir.jsonl`
+plus the public FlashQLA TL0.1.8 sweep:
+`evidence/ladder/results/production_surface_flashqla_20260701.jsonl`.
 
 FlashQLA remains the public schedule and performance reference. The refreshed
-public FlashQLA TL0.1.8 anchor for the same `64K/H16` shape is `1.306838 ms`
-full op, with a measured `0.860569 ms` replay-only component. It must stay in
+public FlashQLA TL0.1.8 surface sweep includes `1.3073 ms` for the same
+`64K/H16` shape, with `0.8628 ms` replay-only and `0.4712 ms` prepare
+components. It must stay in
 the public-environment comparison lane:
 
 ```text
@@ -1486,47 +1477,57 @@ the main evidence spine. It does not replace every publication benchmark:
 | verified FLA package identity | needed before saying externally verified FLA 0.5.1 without caveat |
 | generated-code archive for TMA/WGMMA claims | needed before making low-level lowering claims |
 
-### 5.4 What The Case Study Shows
+### 5.4 Takeaways
 
-In the formal `64K/H16` evidence snapshot, the scoped TileOps path is much
-faster than the recorded vendored FLA reference, but the more reusable result is
-the workflow and the attribution discipline. The A/replay cross-ablation also
-prevents a too-simple story: the final TileOps advantage over public FlashQLA is
-not explained by "we copied CP-split and then changed A." On the tested shape,
-TileOps replay/output is faster even when fed public FlashQLA `A/g`, and the
-blocked-inverse / Neumann-style A producer supplies another independent
-improvement.
+The reusable lesson is not a single latency number. It is a workflow for making
+agent-assisted kernel work reliable enough to learn from.
 
-Level 1 showed that agents are useful before performance tuning begins. They
-can read papers and reference implementations, reconstruct an operator,
-separate it into measurable components, and build correctness and benchmark
-gates.
+**1. Make the search auditable.**
 
-Level 2 showed where local agentic tuning is strong. Inside a fixed semantic
-contract, the agent can search TileLang expression choices, move scale factors,
-diagnose store paths, and reject tempting fusion candidates. The gate loop is
-what turns this from code generation into engineering search.
+The first job was not to make the kernel faster. It was to make each attempted
+change decidable: correct or incorrect, faster or slower, comparable or not
+comparable. Correctness gates turned generated code into engineering evidence.
+Stable benchmark harnesses turned speed claims into measurements. Evidence
+lanes kept component diagnostics, failed rows, public-environment anchors, and
+same-run TileOps rows from collapsing into one misleading ladder.
 
-Level 3 showed where local tuning is not enough. The major search-space
-changes came from outside the local AKO loop: Qwen FlashQLA supplied the
-production CP-split replay schedule, and human mathematical analysis supplied
-the blocked inverse / Neumann-style A producer. The agent then became useful
-again inside those new spaces, where it produced a TileOps-owned replay/output
-implementation and production dispatch evidence.
+This is why the article treats failed-correctness timings as diagnostics rather
+than performance data, and why the final Section 11 comparison was remeasured
+through TileOps' benchmark path before entering the main story. The point is
+larger than this one kernel: an agent can search quickly, but only an auditable
+loop can tell whether the search is making progress.
 
-The collaboration pattern is the main lesson:
+**2. Use agents for local search.**
 
-```text
-make the operator measurable
--> let agents search fixed-contract implementation space
--> use expert input to reshape the hard search spaces
--> productionize with correctness, benchmark, lowering, and dispatch gates
-```
+Once the problem is measurable, agents are strong local searchers. They can try
+layout variants, inspect lowering, isolate store-path bottlenecks, build
+adapters, keep benchmark scripts honest, and iterate against correctness gates.
+That is real engineering leverage. It changes the pace at which a fixed
+implementation space can be explored.
 
-That is less sensational than "AI invented a kernel," but it is more useful.
-The scoped TileOps path improved because the work combined measurable agentic
-search, human mathematical judgment, expert open-source schedules, and
-production evidence discipline.
+The boundary is just as important. The agent did not magically discover the
+right global formulation from nowhere. It improved what had been made
+searchable. Local tuning could expose the wall, reduce waste, and identify
+bottlenecks, but it could not by itself remove the long replay dependency or
+reformulate the prepare operator.
+
+**3. Change the search space deliberately.**
+
+The largest moves happened when the search space changed. FlashQLA supplied the
+CP-split replay schedule family. Human mathematical analysis supplied the
+blocked-inverse / Neumann-style prepare view. After those changes, the agent
+became useful again: porting, adapting, validating, benchmarking, and
+productionizing inside the new space.
+
+That is the case study's main pattern. The useful result was not autonomous
+invention. It was auditable collaboration: measure the search, let agents
+explore locally, reshape the space with human and expert input, then attribute
+each speedup to the mechanism that actually caused it.
+
+The detailed evidence behind those claims belongs in the supporting material:
+the A/replay cross-ablation, the TL0.1.8-lowering harness row, the rejected
+native-port diagnostics, and the store-path component microbenchmark. The main
+article only needs the thread they support.
 
 ### 5.5 Remaining Publication Blockers
 

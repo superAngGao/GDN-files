@@ -112,14 +112,18 @@ combined row uses the TL0.1.8 lowered KKT via an external launcher.
 ## External And Final Anchors
 
 These rows are useful context, but they should not be mixed into the controlled
-experiment-adapter chain as if they were intermediate algorithmic steps.
+experiment-adapter chain as if they were intermediate algorithmic steps. For
+the main article's productionization section, the stronger claim is now the
+refreshed production-surface sweep rather than the single `64K/H16` wrapper
+anchor.
 
 | Variant | Role | Latency ms | Correctness | Use in blog |
 | --- | --- | ---: | --- | --- |
 | `ref_fla_051` | External correctness oracle and FLA latency baseline. | 8.02574 | self/reference row | May be reported as the recorded vendored FLA reference baseline, with version caveat. |
-| `tileops_final_dispatch` | Final production wrapper / dispatch context from PR1596. | 0.692026 | pass vs FLA reference | May be reported as the final production dispatch row, not as an experiment-adapter step. |
+| `tileops_final_dispatch` | Final production wrapper / dispatch context from PR1596. | 0.692026 historical anchor; 0.6951 in refreshed surface sweep | pass vs FLA reference | May be reported as the production dispatch surface, not as an experiment-adapter step. |
 
-`tileops_final_dispatch` is slightly faster than the explicit V6 adapter:
+The historical `tileops_final_dispatch` anchor is slightly faster than the
+explicit V6 adapter:
 
 ```text
 0.715062 ms / 0.692026 ms = 1.03x
@@ -127,6 +131,24 @@ experiment-adapter chain as if they were intermediate algorithmic steps.
 
 This is a production wrapper / dispatch-context observation. It should not be
 written as a new algorithmic jump after the blocked-inverse A producer.
+
+Production-surface evidence:
+
+- TileOps vs FLA, GPU3/H200, TileOps benchmark infrastructure:
+  `evidence/ladder/results/production_surface_tileops_vs_fla_20260701_tmpdir.jsonl`.
+- Public FlashQLA TL0.1.8 Docker sweep:
+  `evidence/ladder/results/production_surface_flashqla_20260701.jsonl`.
+
+The measured TileOps production-dispatch rows are `0.3723 ms` at `32K/H16`,
+`0.6951 ms` at `64K/H16`, `1.2284 ms` at `128K/H16`, `1.2238 ms` at
+`64K/H32`, and `2.3085 ms` at `64K/H64`.
+
+The corresponding public FlashQLA TL0.1.8 full-op rows are `0.5440 ms` at
+`32K/H16`, `1.3073 ms` at `64K/H16`, `2.6055 ms` at `128K/H16`,
+`2.5942 ms` at `64K/H32`, and `6.7233 ms` at `64K/H64`. Under the
+public-environment comparison lane, TileOps production dispatch is `146%-291%`
+of public FlashQLA throughput across this measured surface. This is still not a
+same-lowering replay attribution experiment.
 
 ## Source / ABI Caveats
 
@@ -198,7 +220,8 @@ Supported:
   not be presented as the main A-producer ablation.
 - `tileops_owned_cp_blocked_inverse_a -> tileops_final_dispatch` supports:
   final production wrapper / dispatch context is consistent with the V6
-  blocked-inverse path and is the row to cite for production-candidate latency.
+  blocked-inverse path. Cite the refreshed production-surface sweep for the
+  productionization claim.
 
 Not supported:
 
