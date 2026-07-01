@@ -96,7 +96,7 @@ kept out of this headline table.
 | initial correctness | historical full-op, rerun | `local_initial_prefill_f147 = 11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` |
 | local prepare specialization | historical full-op, rerun | `local_prepare_specialized_00a60 = 10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` |
 | local wall | historical full-op, rerun | `local_bthd_wall_d09c = 5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` |
-| FlashQLA reference | external public full-op anchor | public FlashQLA TL0.1.8 full `1.306838 ms` | Qwen FlashQLA supplies the production CP-split schedule family | `614.1%` public-env |
+| <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">external public full-op anchor</span> | <span style="color:#8a8f98">public FlashQLA TL0.1.8 full `1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> |
 | FlashQLA-style A + TileOps replay | external-lowering full-op harness | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | the schedule family reaches the expected performance neighborhood before Neumann | `984.7%` |
 | Neumann prepare | formal full-op | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human blocked-inverse / Neumann-style prepare improves the same replay family | `1122.4%` |
 | final production dispatch | formal full-op | `tileops_final_dispatch = 0.692026 ms` | the production wrapper/dispatch path preserves the Neumann-family result | `1159.7%` |
