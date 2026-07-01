@@ -81,16 +81,16 @@ Representative narrative roadmap:
 Relative performance is reported as throughput relative to a reference:
 `reference_latency / variant_latency * 100%`. `100%` means parity with the
 reference; values above `100%` mean the variant has higher throughput than that
-reference. Rows marked "diagnostic only" are not performance claims; they mark
-where the search changed direction. The measured rows below use
+reference. The formal measured rows below use
 `B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, H200/GPU4, and the same input
-artifact hash:
+artifact hash; the Level 2 wall row is explicitly marked as historical
+diagnostic evidence because it predates this formal harness:
 `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`.
 
 | Story node | Evidence | Blog meaning | `64K/H16` latency | Perf vs recorded FLA (%) |
 | --- | --- | --- | ---: | ---: |
 | measurable baseline | `generic_a_legacy` | the operator is correct and measurable, but the legacy replay/output path is slow | `25.3849 ms` | `73.9%` |
-| Level 2 wall | direct-fusion and local-fusion diagnostics | local AKO can remove some stores, but it does not shorten the long replay dependency | diagnostic only | not reported |
+| Level 2 wall | historical direct fused skeleton without CP split | local AKO can remove some stores, but it does not shorten the long replay dependency | `~4.15 ms` historical diagnostic | `~452%` historical / not same-run |
 | Level 3 search-space expansion | FlashQLA CP-split schedule + human blocked-inverse / Neumann prepare | external input changes the schedule and the A producer search space | details later | details later |
 | final scoped TileOps row | `tileops_final_dispatch` | production wrapper / dispatch context for the current scoped candidate | `0.722839 ms` | `2594.8%` |
 
@@ -623,7 +623,7 @@ End-to-end wall checkpoint:
 
 | Node | Accepted fixed-contract full-op evidence | `64K/H16` latency | Decision |
 | --- | --- | ---: | --- |
-| Level 2 wall | `generic_a_legacy`: generic A with legacy replay/output; direct/local fusion did not produce a better accepted long-context full-op row | `25.3849 ms` | stop local fusion as the main answer; change the replay search space |
+| Level 2 wall | historical direct fused skeleton without CP split | `~4.15 ms` historical diagnostic | stop local fusion as the main answer; change the replay search space |
 
 The rejected fusion candidates were useful because they clarified the boundary.
 Local fusion can improve the data path inside a schedule, but it does not
