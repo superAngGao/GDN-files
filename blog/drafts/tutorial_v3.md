@@ -13,7 +13,7 @@ keep its ABI caveats.
 Figure note: figures below are Mermaid placeholders for final publication
 graphics.
 
-## Roadmap And Evidence Contract
+## 0. Roadmap And Evidence Contract
 
 This is not a story about an AI magically inventing a faster GPU kernel. It is
 a story about how agents become useful when a kernel problem is made
@@ -69,12 +69,12 @@ The rewritten structure is:
 
 | Part | Purpose |
 | --- | --- |
-| Roadmap and evidence contract | Define the claim boundaries, evidence lanes, and terminology. |
-| Part I: operator | Explain why GDN prefill is a recurrent-memory scheduling problem. |
-| Part II: Level 1 | Build correctness, benchmark, lowering, and decision gates. |
-| Part III: Level 2 | Show local AKO wins and the fixed-contract wall. |
-| Part IV: Level 3 | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
-| Part V: guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
+| 0. Roadmap and evidence contract | Define the claim boundaries, evidence lanes, and terminology. |
+| 1. Understanding the operator | Explain why GDN prefill is a recurrent-memory scheduling problem. |
+| 2. Level 1 | Build correctness, benchmark, lowering, and decision gates. |
+| 3. Level 2 | Show local AKO wins and the fixed-contract wall. |
+| 4. Level 3 | Explain the external search-space expansions: FlashQLA schedule and human blocked-inverse / Neumann prepare. |
+| 5. Guardrails and evidence | Separate formal rows, anchors, caveats, negative results, and publication blockers. |
 
 Representative narrative roadmap:
 
@@ -142,7 +142,7 @@ TileOps vs FlashQLA is a public-environment comparison, not a controlled
 same-lowering replay attribution experiment.
 ```
 
-## Part I: Understanding The Operator
+## 1. Understanding The Operator
 
 This part builds the operator model before any kernel tuning appears. The goal
 is to make the reader understand why GDN prefill is hard: it is a recurrent
@@ -284,7 +284,7 @@ boundaries remain useful for testing and attribution.
 The figure is deliberately higher-level than a kernel listing. The purpose is
 to expose component boundaries that can be tested, timed, and optimized.
 
-## Part II: Level 1 - Make The Operator Measurable
+## 2. Level 1 - Make The Operator Measurable
 
 Level 1 is the correctness and measurement layer. Before the agent can tune a
 kernel, it needs a reference, a decomposition, a timer, lowering artifacts, and
@@ -383,7 +383,7 @@ placement, store paths, and early fusion attempts. Level 3 will show what
 happened when external input changed the search space: human blocked
 inverse/Neumann prepare, and Qwen FlashQLA's CP-split schedule for long replay.
 
-## Part III: Level 2 - Local AKO Inside A Fixed Contract
+## 3. Level 2 - Local AKO Inside A Fixed Contract
 
 Level 2 is where local agentic kernel optimization works well. The math and
 schedule contract stay fixed, while the agent searches TileLang expression
@@ -636,7 +636,7 @@ local implementation choices and identified the bottleneck, but the next
 performance jump needed a different search space. That is where Level 3
 begins.
 
-## Part IV: Level 3 - External Input Changes The Search Space
+## 4. Level 3 - External Input Changes The Search Space
 
 Level 3 is where the search space changes. FlashQLA supplied the
 production-grade CP-split replay schedule family; human mathematical analysis
@@ -1075,7 +1075,7 @@ docker/runtime, dispatch heuristic, benchmark timer, GPU, or FlashQLA/FLA
 environment changes.
 ```
 
-## Part V: Guardrails, Evidence Snapshot, And Takeaways
+## 5. Guardrails, Evidence Snapshot, And Takeaways
 
 The final part separates support evidence from headline evidence. Migration
 lessons, prefix-scan negative results, formal `64K/H16` rows, source caveats,
