@@ -433,6 +433,24 @@ buffer, fix a store path, or reject a tempting fusion. It cannot, by itself,
 turn a long recurrence into a shorter one unless the search space is changed.
 That distinction is the bridge to Level 3.
 
+A concrete AKO episode in this section has five parts:
+
+```text
+hypothesis -> TileLang edit -> correctness gate -> benchmark/lowering evidence
+           -> keep, reject, or turn into a sharper next question
+```
+
+Two examples make the agentic part less abstract:
+
+| Episode | Agent hypothesis | Code/search move | Gate result | Decision |
+| --- | --- | --- | --- | --- |
+| scale placement | the gate scale can move across the outer product without changing the math | apply the scale on the value tile that already feeds the state update | correctness preserved; replay component latency improved in historical diagnostics | keep as a local data-path win |
+| direct fusion | if global intermediates are expensive, fusing replay/output should solve long-context latency | prototype a fused path that writes only `o` and `final_state` | correctness/compile/latency gates showed fusion alone did not remove the long replay dependency | reject as the main long-context answer; use the failure to motivate CP split |
+
+The important pattern is not that the agent always picked the final global
+direction. It generated plausible local moves, ran them through gates, and made
+their limits visible enough for the next search-space change to be justified.
+
 Figure 3 summarizes the local tuning ladder.
 
 ```mermaid

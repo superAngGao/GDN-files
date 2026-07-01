@@ -31,11 +31,12 @@ The first roadmap table now uses story-level nodes rather than internal variant
 IDs. Latency and performance columns are public-facing, while exact kernel /
 variant mapping is maintained in SI and evidence inventory.
 
-External review status: the draft has strong technical content and unusually
-careful attribution/evidence boundaries, but it still reads too much like an
-internal evidence-driven review memo. The next polish pass should make the main
-article friendlier: problem first, result second, core insight third, with
-evidence contracts and caveats moved into callouts or SI.
+External review status: P0 is closed as of `f003792`, and P1 is now underway.
+The opening now starts with problem/result/core insight, the roadmap is
+split into controlled rows / anchors / production surface, high-risk formula
+wording is schematic, and intermediate-A details are kept out of the main
+claim. Remaining work is P1/P2 polish: stronger agentic episodes, error
+reporting, reproduction entry, publication figures, and final compression.
 
 ## Polish Priorities
 
@@ -135,9 +136,9 @@ The figures should explain strategy changes, not decorate the text.
 
 ### P1 - Agentic Evidence
 
-- [ ] Add one or two concrete AKO episodes so "Agentic Kernel Optimization" is
+- [x] Add one or two concrete AKO episodes so "Agentic Kernel Optimization" is
       not just branding.
-- [ ] Each episode should include:
+- [x] Each episode should include:
       hypothesis, TileLang/code pattern changed, correctness gate, benchmark
       result, and accept/reject decision.
 - [ ] Good candidate episodes:
@@ -147,6 +148,11 @@ The figures should explain strategy changes, not decorate the text.
       V5 as first correct but incomplete FlashQLA-inspired adaptation.
 - [ ] Show where human intervention changed the search space, rather than
       implying the agent discovered every global direction alone.
+
+Current status: main text now includes two compact Level-2 AKO episodes
+(`scale placement` and `direct fusion`) using the hypothesis/edit/gate/decision
+shape. Further polish may add one Level-3 episode or move detailed episode
+evidence to SI.
 
 ### P1 - Evidence Hygiene
 
