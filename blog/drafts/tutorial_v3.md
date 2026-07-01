@@ -93,23 +93,25 @@ checkpoints under this contract; component-only scale/store diagnostics are
 kept out of this headline table. The final production-surface row is a
 separate formal shape sweep on GPU3/H200, because its purpose is to show that
 the optimized path survives dispatch across the serving surface rather than
-only at one `64K/H16` point.
+only at one `64K/H16` point. The public-facing roadmap names story nodes, not
+internal variant IDs; the exact variant-to-code mapping is maintained in the
+supporting information and evidence inventory.
 
 | Story node | Representative end-to-end result | Blog meaning | Perf vs recorded FLA (%) | Perf vs public FlashQLA (%) |
 | --- | ---: | --- | ---: | ---: |
-| initial correctness | `local_initial_prefill_f147 = 11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` | N/A |
-| local prepare specialization | `local_prepare_specialized_00a60 = 10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` | N/A |
-| local wall | `local_bthd_wall_d09c = 5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` | N/A |
+| initial correctness | first correct full-op checkpoint: `11.1762 ms` | the first serving prefill op is correct and measurable | `71.8%` | N/A |
+| local prepare specialization | local prepare-specialized full op: `10.8353 ms` | local AKO improves the fixed-contract path, but does not change replay depth | `74.1%` | N/A |
+| local wall | best local fixed-contract full op: `5.5566 ms` | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `144.4%` | N/A |
 | <span style="color:#8a8f98">FlashQLA reference</span> | <span style="color:#8a8f98">public FlashQLA TL0.1.8 full `1.306838 ms`</span> | <span style="color:#8a8f98">Qwen FlashQLA supplies the production CP-split schedule family</span> | <span style="color:#8a8f98">`614.1%` public-env</span> | <span style="color:#8a8f98">`100.0%` anchor</span> |
 | FlashQLA-style A + TileOps replay | TL0.1.8-lowering prepare + TileOps replay `0.815029 ms` | after studying FlashQLA, the improved TileOps replay/output path reaches the performance neighborhood before Neumann | `984.7%` | `160.3%` |
-| Neumann prepare | `tileops_owned_cp_blocked_inverse_a = 0.715062 ms` | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `1122.4%` | `182.8%` |
-| production dispatch surface | `tileops_final_dispatch`: `0.3723-2.3085 ms` over `32K-128K` and `H16-H64` | the optimized path becomes a dispatchable kernel family across shape space | `822%-1330%` | `146%-291%` |
+| Neumann prepare | blocked-inverse / Neumann-style full op: `0.715062 ms` | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm for the same replay family | `1122.4%` | `182.8%` |
+| production dispatch surface | production dispatch sweep: `0.3723-2.3085 ms` over `32K-128K` and `H16-H64` | the optimized path becomes a dispatchable kernel family across shape space | `822%-1330%` | `146%-291%` |
 
-The local rerun also measured `local_h_tile_tuned_827 = 10.1631 ms`, but that
-row failed the formal `atol=rtol=5e-2` correctness gate, so it stays out of the
-positive roadmap. `tileops_owned_cp_generic_a = 2.7674 ms` is also not a
-headline story node: it is the first correct CP adaptation after studying
-FlashQLA, useful as process evidence, but not performance-near FlashQLA.
+The local rerun also measured an h-tile diagnostic at `10.1631 ms`, but that row
+failed the formal `atol=rtol=5e-2` correctness gate, so it stays out of the
+positive roadmap. The first correct CP adaptation after studying FlashQLA was
+`2.7674 ms`; it is useful as process evidence, but not performance-near
+FlashQLA, so it also stays out of the headline roadmap.
 
 Component diagnostics, failed candidates, and migration/lowering anchors belong
 in the supporting evidence or appendix. A blocker row may appear only as an
