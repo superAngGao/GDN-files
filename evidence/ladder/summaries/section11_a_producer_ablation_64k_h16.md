@@ -18,7 +18,22 @@ adaptation, not the controlled A-producer ablation.
 - Artifact hash:
   `sha256:4ba1e0c0c92ade7cd415b04f57f7f8ab93ba4781437daa6f81ac899184053810`
 
-## Results
+## Main Full End-To-End Rows
+
+These are the rows Section 11 should use in the main text.
+
+| Row | Prepare-A producer | Replay/output | Timing scope | Correctness | Latency ms | Use |
+| --- | --- | --- | --- | --- | ---: | --- |
+| public FlashQLA full | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | pass / public anchor | 1.304489 | external baseline |
+| FlashQLA-style prepare A + TileOps replay | current-TL FlashQLA-style KKT producer | TileOps PR1596 CP replay | full combined row | TBD | TBD | fill after producer fix |
+| TileOps prepare A + TileOps replay | TileOps blocksolve / Neumann-style A | TileOps PR1596 CP replay | full combined row | pass vs recorded FLA | 0.691642 | current measured TileOps row |
+
+The middle row is intentionally not filled yet. A measured current-TL
+FlashQLA-style producer row exists in the harness, but it fails correctness at
+`64K/H16`. Once that producer is fixed, rerun the combined row and replace
+`TBD` with the measured latency.
+
+## Supporting Component Diagnostics
 
 | Row | A producer | Replay/output | Timing scope | Correctness reference | Latency ms |
 | --- | --- | --- | --- | --- | ---: |
@@ -29,8 +44,9 @@ adaptation, not the controlled A-producer ablation.
 | `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay only | recorded vendored FLA reference | 0.542905 |
 | `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | 0.691642 |
 
-All refreshed TileOps rows pass correctness against the recorded vendored FLA
-reference.
+All refreshed TileOps component rows pass correctness against the recorded
+vendored FLA reference. These diagnostics explain the mechanism, but they
+should not replace the main full-op Section 11 table.
 
 ## Rejected Measured Combined Rows
 
@@ -129,18 +145,15 @@ Use this sequence in the blog:
 ```text
 local wall
 -> V5 first correct CP adaptation, but still not FlashQLA-performance-near
--> public FlashQLA A/g + TileOps replay already beats public FlashQLA by a
-   conservative component-sum estimate
--> TileOps blocksolve / Neumann-style A producer reduces the producer side
-   further under the same TileOps replay path
+-> FlashQLA-style prepare A + TileOps replay/output full row: TBD
+-> TileOps blocksolve / Neumann-style A producer + TileOps replay/output full
+   row: 0.691642 ms
 ```
 
-This is stronger than saying "V5 was slow, then V6 was fast." It explains the
-two independent axes:
-
-1. TileOps replay/output became faster under the CP-split schedule family.
-2. TileOps A producer became faster through the blocked-inverse /
-   Neumann-style path.
+This keeps Section 11 on full end-to-end rows. The replay-only and
+component-sum rows remain useful diagnostics, but they should not be the
+headline claim until the missing FlashQLA-style prepare-A full row is fixed and
+measured.
 
 ## Caveats
 

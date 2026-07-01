@@ -14,8 +14,8 @@ rows in `blog_ladder_evidence_64k_h16.md`.
 
 July 1 refresh: the TileOps replay rows below were rerun under the same
 `warmup=5, repeat=20, trials=3` CUPTI/L2-flush timing contract as the public
-FlashQLA TL0.1.8 export. These refreshed rows are the ones to cite in Section
-11.
+FlashQLA TL0.1.8 export. These refreshed rows are supporting diagnostics for
+Section 11, not the main full-op table.
 
 We also attempted a true measured combined row using the current-TL migrated
 FlashQLA-style KKT producer feeding TileOps replay. That row is measurable, but

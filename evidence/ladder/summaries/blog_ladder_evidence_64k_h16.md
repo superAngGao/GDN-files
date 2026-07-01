@@ -61,26 +61,21 @@ The FlashQLA-learning sequence should be written as:
 ```text
 local wall
   -> V5 first correct CP adaptation, still not performance-near FlashQLA
-  -> public FlashQLA producer + TileOps replay exceeds public FlashQLA estimate
-  -> TileOps blocksolve / Neumann-style A producer reduces producer-side cost
+  -> FlashQLA-style prepare A + TileOps replay/output full row: TBD
+  -> TileOps blocksolve / Neumann-style A producer full row: measured
 ```
 
-The clean Section 11 numbers are:
+The clean Section 11 table should use full end-to-end rows:
 
 | Evidence | Latency ms | Meaning |
 | --- | ---: | --- |
 | public FlashQLA full | 1.304489 | external TL0.1.8 anchor |
-| public FlashQLA producer | 0.471943 | `chunk_local_cumsum + kkt_solve` component |
-| public FlashQLA replay | 0.864754 | public `cp_preprocess + fused_gdr_fwd` component |
-| public FlashQLA A/g + TileOps replay | 0.542807 | replay/output alignment and improvement row |
-| TileOps A/g + TileOps replay | 0.542905 | same replay path with TileOps A/g |
-| TileOps blocksolve A + TileOps replay, include producers | 0.691642 | A-producer-side improvement under TileOps replay |
-| public FlashQLA producer + TileOps replay estimate | 1.014750 | cross-environment component estimate; not a single fused full path |
+| FlashQLA-style prepare A + TileOps replay/output full row | TBD | fill after current-TL FlashQLA-style KKT producer is fixed |
+| TileOps blocksolve A + TileOps replay/output full row | 0.691642 | measured TileOps prepare-A row |
 
-These numbers show that TileOps replay/output became faster before invoking the
-blocked-inverse / Neumann-style A producer. They also show that the TileOps A
-producer then reduced the producer-side cost further. This is the evidence to
-use for Section 11, not `5.3912 ms -> 0.746707 ms` by itself.
+Replay-only and component-sum rows can stay in supporting diagnostics, but
+they should not be the headline Section 11 claim. The row to fill later is the
+full combined FlashQLA-style prepare-A row, not another estimate.
 
 We also attempted a true measured combined row:
 
@@ -171,10 +166,11 @@ Supported:
   producer support a process claim: the agent was adapting an external schedule
   idea rather than reproducing a finished FlashQLA kernel, and the failed
   intermediate row helped identify the need for A/replay cross-ablation.
-- The refreshed Section 11 cross-ablation supports: with public FlashQLA A/g
-  fixed, TileOps replay is `0.542807 ms`; with TileOps A/g fixed, the same
-  replay is `0.542905 ms`; and TileOps full producer plus replay is
-  `0.691642 ms`. That is the cleaner evidence for the A/replay split.
+- The refreshed replay-only/component rows support diagnostics: with public
+  FlashQLA A/g fixed, TileOps replay is `0.542807 ms`; with TileOps A/g fixed,
+  the same replay is `0.542905 ms`; and TileOps full producer plus replay is
+  `0.691642 ms`. They should remain supporting evidence until the missing
+  full combined FlashQLA-style prepare-A row is fixed and measured.
 - `tileops_owned_cp_generic_a -> tileops_owned_cp_blocked_inverse_a` supports
   only an experiment-adapter bridge under the same CP downstream ABI; it should
   not be presented as the main A-producer ablation.

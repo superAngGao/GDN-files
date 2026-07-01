@@ -79,7 +79,7 @@ artifact hash:
 | --- | --- | --- | --- | ---: | ---: |
 | baseline | `generic_a_legacy` | legacy replay/output, generic A | starting point after correctness gates | `25.3849 ms` | `73.9%` |
 | first CP adaptation | `tileops_owned_cp_generic_a` | early TileOps CP downstream adapter, conservative generic A | first correct TileOps-owned result after studying FlashQLA; useful, but still not performance-near FlashQLA | `5.3912 ms` | `347.9%` |
-| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP split, blocked-inverse / Neumann-style A | bridge evidence for the A-producer implementation; Section 11 uses the cleaner A/replay ablation for causality | `0.746707 ms` | `2511.9%` |
+| producer-swap adapter | `tileops_owned_cp_blocked_inverse_a` | same CP split, blocked-inverse / Neumann-style A | bridge evidence for the A-producer implementation; Section 11 uses the full prepare-A comparison for causality | `0.746707 ms` | `2511.9%` |
 | final anchor | `tileops_final_dispatch` | shape-aware production dispatch | final production wrapper / dispatch context, not an experiment-adapter step | `0.722839 ms` | `2594.8%` |
 
 The experiment-adapter chain is:
@@ -101,11 +101,11 @@ The FlashQLA-learning sequence is a separate experiment lane:
 | --- | --- | --- |
 | wall | direct fusion reduced some materialization but did not shorten the long replay dependency | local AKO hit a schedule wall |
 | first correct adaptation | `tileops_owned_cp_generic_a = 5.3912 ms` | the FlashQLA CP idea was adapted into TileOps, but the implementation was not yet performance-near FlashQLA |
-| replay/output breakthrough before Neumann | public FlashQLA producer `0.471943 ms` + TileOps replay `0.542807 ms` gives a `1.014750 ms` cross-ablation estimate, faster than public FlashQLA full `1.304489 ms` | TileOps replay/output had become faster even while prepare still used public FlashQLA-style A/KKT |
+| pending prepare-A full row | FlashQLA-style prepare A + TileOps replay/output full combined latency: `TBD` after producer fix | this will be the clean comparison against the TileOps prepare-A full row |
 
 Component diagnostics, failed candidates, and migration/lowering anchors belong
-in the supporting evidence or appendix. The main roadmap should not display
-unmeasured `TBD` rows or `N/A` cells as if they were part of the formal result.
+in the supporting evidence or appendix. A `TBD` row may appear only as an
+explicit publication blocker; it must not be read as a formal result.
 
 The final article should not mix component rows, external FlashQLA anchors, and
 TileOps experiment-adapter rows into one apparent speedup ladder.
@@ -622,11 +622,10 @@ studying FlashQLA, not as a successful reproduction of FlashQLA.
 
 This is evidence for the Level 2 wall and for the need to change the replay
 search space. It is not evidence that V5 reached FlashQLA's production schedule
-quality. Replay alignment should be judged through the later `FQ18/TO`
-cross-ablation, not inferred from this controlled bridge row. That later row
-shows the next important node: with public FlashQLA-style A/KKT still in place,
-TileOps replay/output is already fast enough to beat public FlashQLA by a
-conservative component-sum estimate.
+quality. The clean comparison should come from the later full combined row:
+FlashQLA-style prepare A feeding TileOps replay/output. That row is still
+`TBD` until the current-TL FlashQLA-style producer is fixed; replay-only
+diagnostics stay in the evidence note.
 
 The failed and rejected candidates were useful because they clarified the
 boundary. Local fusion can improve the data path inside a schedule, but it
@@ -792,13 +791,12 @@ experiment, not as a single pass/fail row.
 | --- | --- | --- |
 | local wall | direct fusion reduced some materialization but did not shorten the long replay chain; `generic_a_legacy` remained `25.3849 ms` on `64K/H16` | local AKO needed an external schedule idea |
 | first correct adaptation | V5 `tileops_owned_cp_generic_a = 5.3912 ms` | the FlashQLA CP idea had been adapted into TileOps, but the result was not performance-near FlashQLA |
-| replay/output breakthrough before Neumann | public FlashQLA TL0.1.8 producer `0.471943 ms` + TileOps replay `0.542807 ms` gives a `1.014750 ms` cross-ablation estimate, faster than public FlashQLA full `1.304489 ms` | with FlashQLA-style A/KKT still in place, TileOps replay/output was already faster than the public FlashQLA back half |
+| pending prepare-A full row | FlashQLA-style prepare A + TileOps replay/output full combined latency: `TBD` after producer fix | this will show whether the FlashQLA-style producer plus TileOps replay reaches the expected performance neighborhood |
 
-This third node is the missing explanation for why the final result can exceed
-FlashQLA even though V5 was slow. V5 was the first correct adaptation, not the
-finished schedule implementation. The later A/replay cross-ablation shows that
-TileOps eventually improved the replay/output side itself before invoking the
-blocked-inverse / Neumann-style A producer.
+This third node is intentionally not filled yet. V5 was the first correct
+adaptation, not the finished schedule implementation. The later full combined
+row, once the FlashQLA-style producer is fixed, will show how much of the gap
+is replay/output and how much is prepare-A.
 
 That makes V5 useful rather than embarrassing. Its underperformance, together
 with the mixed TileOps-owned implementation path and conservative generic A
@@ -948,93 +946,37 @@ new producer shape.
 
 Formal A-producer evidence:
 
-**Picked evidence for this node:** use the dedicated Section 11
-cross-ablation, not the V5 `5.3912 ms` bridge row. V5 is useful because it was
-the first correct TileOps-owned CP adaptation, but it is not "FlashQLA-style
-A plus production replay." The A-producer question needs the producer and
-replay pieces separated.
+**Picked evidence for this node:** compare complete end-to-end rows where the
+replay/output schedule is production-shaped and the prepare-A producer changes.
+This section should not rely on component sums as the main claim. The one row
+we still need is the corrected FlashQLA-style prepare-A producer feeding
+TileOps replay/output; it is marked `TBD` until the producer port is fixed.
 
 Evidence note:
 `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_a_producer_ablation_64k_h16.md`.
 
-| Row | A producer | Replay/output | Timing scope | `64K/H16` latency | Meaning |
-| --- | --- | --- | --- | ---: | --- |
-| public FlashQLA full | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | `1.304489 ms` | external anchor |
-| public FlashQLA producer | public FlashQLA TL0.1.8 KKT | producer only | `chunk_local_cumsum + kkt_solve` | `0.471943 ms` | public A/KKT-side component |
-| public FlashQLA replay | exported public FlashQLA A/g | public FlashQLA TL0.1.8 CP replay | `cp_preprocess + fused_gdr_fwd` | `0.864754 ms` | public replay-side component |
-| `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay only | `0.542807 ms` | TileOps replay with public FlashQLA A/g |
-| `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay only | `0.542905 ms` | same TileOps replay with TileOps A/g |
-| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | `0.691642 ms` | TileOps producer plus replay |
+| Row | Prepare-A producer | Replay/output | Timing scope | Correctness | `64K/H16` latency | Use |
+| --- | --- | --- | --- | --- | ---: | --- |
+| public FlashQLA full | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | pass / public anchor | `1.304489 ms` | external baseline |
+| FlashQLA-style prepare A + TileOps replay | current-TL FlashQLA-style KKT producer | TileOps PR1596 CP replay | full combined row | **TBD** | **TBD** | fill after producer fix |
+| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs recorded FLA | `0.691642 ms` | current measured TileOps row |
 
-The replay-only rows are nearly identical:
+The missing middle row is deliberate. Another agent is working on the
+current-TL FlashQLA-style KKT producer. Until that producer is correct at
+`64K/H16`, the blog should not report its latency as performance evidence. The
+failed attempts are recorded only as diagnostics:
 
-```text
-FQ18 A/g + TileOps replay:    0.542807 ms
-TileOps A/g + TileOps replay: 0.542905 ms
-```
-
-That means the replay/output path is the controlled constant in this
-ablation. It also shows that TileOps replay/output is faster than the public
-FlashQLA replay component on this shape:
-
-```text
-0.864754 ms / 0.542807 ms = 1.59x
-```
-
-Now isolate the producer side by comparing conservative component sums. Public
-FlashQLA producer plus TileOps replay is:
-
-```text
-0.471943 ms + 0.542807 ms = 1.014750 ms
-```
-
-Replacing the public FlashQLA producer component with the TileOps blocksolve /
-Neumann-style producer under the same TileOps replay path gives:
-
-```text
-TO/TO full: 0.691642 ms
-```
-
-The implied TileOps producer-side cost in this harness is:
-
-```text
-0.691642 ms - 0.542905 ms = 0.148737 ms
-```
-
-This supports the Section 11 claim: after the CP replay/output path had been
-separated, the blocked-inverse / Neumann-style producer reduced the prepare
-side. The supported comparison is:
-
-```text
-public FlashQLA producer + TileOps replay estimate: 1.014750 ms
-TileOps blocksolve producer + TileOps replay:       0.691642 ms
-```
-
-That is a `1.47x` producer-side improvement in this cross-ablation.
-
-Why is the first line still called an estimate? Because the direct measured
-combined row was tried and rejected. The harness can run:
-
-```text
-current-TL FlashQLA-style KKT producer + TileOps replay
-```
-
-but at `64K/H16` it fails correctness. Under the three tested GEMM
-compatibility modes, the measured rows were:
-
-| Row | GEMM mode | Latency | Correctness |
+| Attempt | GEMM mode | Observed latency | Why not used |
 | --- | --- | ---: | --- |
-| `FQ/TO` include producers | `default` | `0.811018 ms` | fail, nonfinite output |
-| `FQ/TO` include producers | `legacy` | `1.958386 ms` | fail, nonfinite output |
-| `FQ/TO` include producers | `wgmma` | `0.808363 ms` | fail, nonfinite output |
+| `FQ/TO` include producers | `default` | `0.811018 ms` | correctness fail, nonfinite output |
+| `FQ/TO` include producers | `legacy` | `1.958386 ms` | correctness fail, nonfinite output |
+| `FQ/TO` include producers | `wgmma` | `0.808363 ms` | correctness fail, nonfinite output |
 
-A diagnostic confirmed that `g_cum` matches the public TL0.1.8 artifact, while
-the current-TL KKT producer emits invalid `A` values at this shape. So the
-article should not hide behind an estimate, but it also should not cite a
-wrong measured row. The correct statement is: we attempted the measured
-combined row; it is rejected by correctness; the valid FlashQLA-style evidence
-therefore remains the TL0.1.8 producer component plus exported TL0.1.8 A/g
-artifact replayed by TileOps.
+Once the FlashQLA-style producer is fixed, Section 11 should be updated by
+replacing the `TBD` row with the measured full combined latency. That row will
+be the clean comparison against the `0.691642 ms` TileOps prepare-A row.
+Replay-only and component-sum diagnostics can remain in the evidence note, but
+they should not be the headline Section 11 claim.
 
 The V5/V6 adapter rows should be kept as supporting bridge evidence only. V5
 and V6 use the same CP downstream ABI and materialized A handoff shape/layout,
@@ -1564,9 +1506,9 @@ Before publication:
 2. Refresh broader-shape Tier-1 correctness and benchmark tables if the PR
    head, TileLang wheel, docker/runtime, dispatch heuristic, benchmark timer,
    GPU, or FlashQLA/FLA environment changes.
-3. Keep the A/replay cross-ablation caveat: V5 is not a faithful FlashQLA
-   reproduction, and the `FlashQLA producer + TileOps replay` sum is a
-   cross-environment estimate, not a single measured full path.
+3. Fill the Section 11 `TBD` row after the FlashQLA-style prepare-A producer is
+   fixed. Until then, keep the component-sum rows in supporting diagnostics
+   rather than the main Section 11 claim.
 4. Keep the CP-split non-originality statement.
 5. Keep the hierarchical-prefix negative result scoped to the tested
    `DK=DV=128`, `chunk64` production path.
