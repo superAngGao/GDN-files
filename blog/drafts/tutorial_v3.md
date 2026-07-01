@@ -1004,7 +1004,7 @@ therefore full-op correctness and compatibility under the same downstream
 contract, not equality of the intermediate A tensors and not a pure
 single-variable proof of the A mathematics.
 
-### 4.3 Productionization: From One Fast Kernel To A Dispatch Surface
+### 4.3 Productionization: From A Fast Kernel To A Dispatchable Kernel Family
 
 After the blocked-inverse prepare landed, the next optimization target was no
 longer one more algebraic trick on the `64K/H16` kernel. It was the production
@@ -1056,10 +1056,9 @@ same-lowering attribution experiment.
 
 This table is the more meaningful production claim. The explicit `64K/H16` V6
 adapter row and the `tileops_final_dispatch` wrapper row remain useful
-cross-checks, but the small wrapper delta is not a new algorithmic step. The
-important result is that the blocked-inverse CP path has become a dispatchable
-family whose selected rows pass correctness and stay ahead across this measured
-surface.
+cross-checks, but the important result is that the blocked-inverse CP path has
+become a dispatchable family whose selected rows pass correctness and stay ahead
+across this measured surface.
 
 ```text
 Rerun Tier-1 correctness and benchmark tables if the PR head, TileLang wheel,
@@ -1285,17 +1284,11 @@ the broader production-surface sweep as the production claim.
 | `ref_fla_051` | recorded vendored FLA reference baseline | `8.02574 ms` | self/reference row | correctness oracle and FLA latency context, with version caveat |
 | `tileops_final_dispatch` | PR1596 production wrapper / dispatch context | `0.692026 ms` historical anchor; `0.6951 ms` in the refreshed surface sweep | pass vs recorded FLA reference | production-surface row family, not an experiment-adapter step |
 
-The historical final dispatch anchor was slightly faster than the explicit V6
-adapter:
-
-```text
-0.715062 ms / 0.692026 ms = 1.03x
-```
-
 Write `tileops_final_dispatch` as a production wrapper / dispatch-context
 observation, not as an additional algorithmic improvement after the
-blocked-inverse A producer. The stronger main-text statement is the refreshed
-shape sweep:
+blocked-inverse A producer. The historical single-shape wrapper delta is kept in
+the evidence note; the stronger main-text statement is the refreshed shape
+sweep:
 `evidence/ladder/results/production_surface_tileops_vs_fla_20260701_tmpdir.jsonl`
 plus the public FlashQLA TL0.1.8 sweep:
 `evidence/ladder/results/production_surface_flashqla_20260701.jsonl`.
