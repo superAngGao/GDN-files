@@ -26,13 +26,10 @@ a story about how agents become useful when a kernel problem is made
 measurable, and where they still need human judgment and expert open-source
 references.
 
-The kernel is Gated DeltaNet prefill. It is a good stress test for AI-assisted
-kernel work because it is not "just a GEMM." The operator combines
-chunk-local causal dependencies, a recurrent key-value memory, gate decay,
-delta-rule residual writes, output replay, final-state production, and
-shape-sensitive long-context serving. A correct implementation has to preserve
-the same causal state updates as token-by-token decode, while prefill wants to
-process tens of thousands of tokens efficiently.
+It is a good stress test for AI-assisted kernel work because it is not "just a
+GEMM." The operator combines chunk-local causal dependencies, recurrent memory,
+gate decay, delta-rule residual writes, output replay, final-state production,
+and shape-sensitive long-context serving.
 
 The core lesson is:
 
@@ -139,8 +136,7 @@ experiment-adapter rows into one apparent speedup ladder.
 
 ### 0.2 Terminology And Scope
 
-The final article will compare TileOps, FLA, and FlashQLA, but their roles are
-different:
+This article compares TileOps, FLA, and FlashQLA in three different roles:
 
 | Term | Role in this article |
 | --- | --- |
@@ -1076,7 +1072,7 @@ Formal A-producer evidence:
 
 **Picked evidence for this node:** compare complete end-to-end rows where the
 replay/output schedule is production-shaped and the prepare-A producer changes.
-This section should not rely on component sums as the main claim. The
+The main claim uses complete end-to-end rows, not component sums. The
 FlashQLA-style no-Neumann row is measured by injecting the public TL0.1.8
 lowered KKT kernel through an external launcher, then feeding its `A` plus
 current `chunk_local_cumsum` into the unchanged TileOps PR1596 replay path.
@@ -1091,10 +1087,9 @@ Evidence note:
 | TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.695237 ms` | same benchmark-scope TileOps row |
 
 The native current-TL FlashQLA-style KKT producer is still rejected at
-`64K/H16`, so the blog should not report its latency as performance evidence.
-Those failed attempts remain diagnostics in the evidence files only; their
-latencies are not reported because failed-correctness timings are not
-performance evidence.
+`64K/H16`, so it is excluded from performance claims. Those failed attempts
+remain diagnostics in the evidence files only; their latencies are not reported
+because failed-correctness timings are not performance evidence.
 
 The July 1 revalidation tried a source-parity migration of the current-TL KKT
 producer. The smoke row passed, but the formal 64K/H16 row still failed. The
@@ -1103,8 +1098,8 @@ current-TL `A` contained hundreds of nonfinite values and saturated near fp16
 limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
 
 The filled no-Neumann row is the clean comparison against the `0.695237 ms`
-TileOps prepare-A row. Replay-only and component diagnostics can remain in the
-evidence note, but they should not be the headline A-producer claim. The caveat
+TileOps prepare-A row. Replay-only and component diagnostics remain in the
+evidence note as diagnostics rather than headline A-producer claims. The caveat
 is that this row is an external TL0.1.8-lowering harness row, not a native
 current-TL KKT port.
 
@@ -1261,7 +1256,7 @@ Detailed evidence lives in `tutorial_v3_si.md`, including:
 | source, ABI, and FLA-version caveats | necessary claim-boundary safeguards |
 | reproduce headline rows | command and archived JSONL paths for the formal `64K/H16` evidence |
 
-Keep these constraints when quoting or extending the results:
+The claims above are bounded by these constraints:
 
 1. Keep the Neumann/blocksolve formulas tied to the implementation caveat:
    TileOps uses a blocked-inverse / Neumann-style producer, and the materialized
