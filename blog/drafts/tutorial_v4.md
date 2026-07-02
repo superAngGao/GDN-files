@@ -126,7 +126,8 @@ contract. Each candidate needed four gates:
 How to read the rest:
 
 - the production dispatch sweep is the headline serving result;
-- same-input A/replay ablations explain prepare-A attribution;
+- same-input A/replay ablations explain prepare-A and replay/output
+  attribution;
 - historical local diagnostics explain why a candidate was pursued or rejected;
 - public FlashQLA rows are external anchors, not same-lowering attribution;
 - rejected rows define search boundaries, not performance claims.
@@ -314,7 +315,8 @@ the TileOps blocked shape is about `1.097x` the MAC count of the FlashQLA-style
 forward solve/combine tail. The advantage is not magic arithmetic reduction;
 it is a more parallel backend-friendly shape. SI gives the full MAC accounting.
 
-The clean same-input A-producer ablation uses complete end-to-end rows:
+The clean prepare-A comparison is shown with the public FlashQLA anchor for
+context:
 
 | Row | Prepare-A producer | Replay/output | `64K/H16` latency | Meaning |
 | --- | --- | --- | ---: | --- |
@@ -322,13 +324,8 @@ The clean same-input A-producer ablation uses complete end-to-end rows:
 | FlashQLA-style prepare A + TileOps replay | TL0.1.8-lowering KKT via external launcher | TileOps CP replay | `0.815029 ms` | no-Neumann combined row |
 | TileOps prepare A + TileOps replay | blocked-inverse / Neumann-style A | TileOps CP replay | `0.695237 ms` | headline prepare-A comparison |
 
-Three nearby numbers have different meanings:
-
-| Number | Evidence lane | Meaning |
-| ---: | --- | --- |
-| `0.715062 ms` | adapter bridge | compatibility evidence under the same CP downstream ABI |
-| `0.695237 ms` | same-input A-producer ablation | the headline Neumann prepare comparison |
-| `0.692026 ms` / `~0.6951 ms` | production wrapper / surface sweep | production-context evidence, not the ablation proof |
+Adapter, ablation, and production-wrapper numbers are separated in SI to avoid
+mixing evidence lanes.
 
 The native current-TL FlashQLA-style KKT producer remains a rejected diagnostic
 at `64K/H16`; the no-Neumann row above uses the TL0.1.8-lowering harness.

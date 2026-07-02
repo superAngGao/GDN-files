@@ -211,6 +211,15 @@ replay/output implementation also contributes an independent speedup. The
 article should still avoid saying V5 is a faithful FlashQLA reproduction,
 because V5 is a generic-A bridge row rather than a public FlashQLA row.
 
+Nearby numbers that appear in the article and evidence package have different
+meanings:
+
+| Number | Evidence lane | Meaning |
+| ---: | --- | --- |
+| `0.715062 ms` | adapter bridge | compatibility evidence under the same CP downstream ABI |
+| `0.695237 ms` | same-input A-producer ablation | headline Neumann prepare comparison |
+| `0.692026 ms` / `~0.6951 ms` | production wrapper / surface sweep | production-context evidence, not the ablation proof |
+
 #### SI.3.2 External And Final Anchors
 
 These rows should not be mixed into the experiment-adapter rows. The
