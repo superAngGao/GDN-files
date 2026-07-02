@@ -237,12 +237,11 @@ The decode intuition is:
 \begin{aligned}
 w_t &= \beta_t k_t, \\
 u_t &= \beta_t v_t, \\
-\widehat{u}_t &= \operatorname{state\_read}(w_t, H_{t-1}), \\
-r_t &= u_t - \operatorname{gate}(\widehat{u}_t), \\
-o_t &= \operatorname{state\_read}(q_t, H_{t-1})
-     + \operatorname{local\_residual\_read}(q_t, k_t, r_t), \\
-H_t &= \operatorname{gated\_old\_state}(H_{t-1})
-     + \operatorname{residual\_write}(k_t, r_t).
+\widehat{u}_t &= \mathrm{read}_s(w_t, H_{t-1}), \\
+r_t &= u_t - \mathrm{gate}(\widehat{u}_t), \\
+o_t &= \mathrm{read}_s(q_t, H_{t-1})
+     + \mathrm{read}_{local}(q_t, k_t, r_t), \\
+H_t &= \mathrm{decay}(H_{t-1}) + \mathrm{write}(k_t, r_t).
 \end{aligned}
 ```
 
