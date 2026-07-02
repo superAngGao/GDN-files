@@ -298,8 +298,9 @@ Evidence notes:
 and
 `experiments/gated_deltanet_prefill_blog_ladder/summaries/a_replay_cross_ablation_64k_h16.md`.
 The full external-lowering and Neumann rows use
-`benchmarks.benchmark_base.bench_kernel`; the machine-readable evidence is
-`experiments/gated_deltanet_prefill_blog_ladder/results/section11_tileops_benchmark_ext_lowering_vs_neumann_64k_h16.jsonl`.
+`benchmarks.benchmark_base.bench_kernel`. The machine-readable evidence is
+split across the archived Section 11 JSONL files listed in SI.3.6 rather than a
+single combined JSONL file.
 
 | Row | A producer | Replay/output path | Timing scope | Correctness reference | Latency |
 | --- | --- | --- | --- | --- | ---: |
@@ -415,7 +416,7 @@ The archived evidence files are the publication source of truth:
 | Evidence target | Archived files |
 | --- | --- |
 | Main `64K/H16` ladder and writing summary | `../../evidence/ladder/summaries/blog_ladder_evidence_64k_h16.md`, `../../evidence/ladder/results/formal_64k_h16_current_gpu4_rerun.jsonl`, `../../evidence/ladder/results/formal_64k_h16_historical_local.jsonl` |
-| A/replay cross-ablation | `../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`, `../../evidence/ladder/results/section11_tileops_benchmark_ext_lowering_vs_neumann_64k_h16.jsonl` |
+| A/replay cross-ablation | `../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`, `../../evidence/ladder/summaries/a_replay_cross_ablation_64k_h16.md`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq18_to_replay.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl` |
 | Production dispatch surface | `../../evidence/ladder/results/production_surface_tileops_vs_fla_20260701_tmpdir.jsonl`, `../../evidence/ladder/results/production_surface_flashqla_20260701.jsonl` |
 
 To rerun the current `64K/H16` harness rows from the TileOps repository root:
