@@ -223,25 +223,29 @@ factors across the A producer and replay/output kernel.
 
 For one `(batch, head)` stream, the inputs are:
 
-```text
-q_t, k_t in R^K
-v_t       in R^V
-g_t       scalar gate
-beta_t    scalar write strength
-H_t       in R^{K x V}
+```math
+\begin{aligned}
+q_t, k_t &\in \mathbb{R}^{K}, \\
+v_t &\in \mathbb{R}^{V}, \\
+g_t &\in \mathbb{R}, \\
+\beta_t &\in \mathbb{R}, \\
+H_t &\in \mathbb{R}^{K \times V}.
+\end{aligned}
 ```
 
 The decode intuition is:
 
-```text
-w_t = beta_t * k_t
-u_t = beta_t * v_t
-
-prediction = w_t @ H_{t-1}
-residual   = u_t - gated_prediction
-
-o_t = state_read(q_t, H_{t-1}) + local_residual_read(q_t, k_t, residual)
-H_t = gated_old_state(H_{t-1}) + residual_write(k_t, residual)
+```math
+\begin{aligned}
+w_t &= \beta_t k_t, \\
+u_t &= \beta_t v_t, \\
+\widehat{u}_t &= \operatorname{state\_read}(w_t, H_{t-1}), \\
+r_t &= u_t - \operatorname{gate}(\widehat{u}_t), \\
+o_t &= \operatorname{state\_read}(q_t, H_{t-1})
+     + \operatorname{local\_residual\_read}(q_t, k_t, r_t), \\
+H_t &= \operatorname{gated\_old\_state}(H_{t-1})
+     + \operatorname{residual\_write}(k_t, r_t).
+\end{aligned}
 ```
 
 The important idea is the residual write. GDN does not simply add
@@ -505,9 +509,10 @@ H += k_chunk.T @ v_scaled
 
 Mathematically this is just moving a scalar across an outer product:
 
-```text
-sum_i (scale_i * k_i) v_i^T
-  = sum_i k_i (scale_i * v_i)^T
+```math
+\sum_i (s_i k_i)v_i^\top
+=
+\sum_i k_i(s_i v_i)^\top
 ```
 
 But the TileLang kernel sees a different data path. Scaling `k` creates an
