@@ -908,27 +908,32 @@ implementation family, not a claim that every implementation materializes
 exactly this tensor with exactly this factor placement. For a chunk of length
 `C`, define a strictly lower-triangular interaction matrix:
 
-```text
-M[i, j] = beta[i] * exp(g[i] - g[j]) * <k[i], k[j]>    if i > j
-M[i, j] = 0                                             otherwise
+```math
+M_{i,j} =
+\begin{cases}
+\beta_i \exp(g_i - g_j)\,\langle k_i, k_j\rangle, & i > j, \\
+0, & i \le j .
+\end{cases}
 ```
 
 Then the effective writes have the shape:
 
-```text
-A = (I + M)^(-1)
-R_K = beta-scaled keys under the chosen ABI
-R_V = beta-scaled values under the chosen ABI
-W = A R_K
-U = A R_V
+```math
+\begin{aligned}
+A &= (I + M)^{-1}, \\
+R_K &= \text{beta-scaled keys under the chosen ABI}, \\
+R_V &= \text{beta-scaled values under the chosen ABI}, \\
+W &= A R_K, \\
+U &= A R_V .
+\end{aligned}
 ```
 
 This is the notation to keep in the article: `A` is a left-multiply correction
 over the token axis. It turns raw ABI-scaled keys and values into effective
 writes that already include the causal delta-rule corrections within the
-chunk. The key interaction term `<k[i], k[j]>` is essential: without it, the
-formula would not represent the Gram-style erase/correction structure used by
-the prepare kernel.
+chunk. The key interaction term $\langle k_i, k_j\rangle$ is essential:
+without it, the formula would not represent the Gram-style erase/correction
+structure used by the prepare kernel.
 
 There is one implementation convention to state carefully. In the partitioned
 CP path, TileOps builds the materialized `A` with a zero gate input and passes
@@ -941,24 +946,26 @@ the A producer and the replay kernel.
 A Neumann view explains why this is an attractive producer shape. Because `M`
 is strictly lower triangular inside a fixed chunk:
 
-```text
-(I + M)^(-1) = I - M + M^2 - M^3 + ...
+```math
+(I + M)^{-1} = I - M + M^2 - M^3 + \cdots
 ```
 
 For a `C x C` strictly lower-triangular matrix, `M` is nilpotent:
-`M^C = 0`. So this is not an infinite approximation; it is an exact finite
-series that truncates after at most `C - 1` powers. The engineering point is not
-"use a random approximation instead of the operator." The point is that the
-causal correction has a lower-triangular inverse/update structure that can be
-blocked and specialized.
+$M^C = 0$. So this is not an infinite approximation; it is an exact finite
+series that truncates after at most $C - 1$ powers. The engineering point is
+not "use a random approximation instead of the operator." The point is that
+the causal correction has a lower-triangular inverse/update structure that can
+be blocked and specialized.
 
 For the production `chunk64, DK=128` path, TileOps splits the chunk into four
 16-token blocks. If `B_r = I + M_rr` is the diagonal block and `L_rs = M_rs`
 is a lower off-diagonal block, the ideal block inverse recurrence is:
 
-```text
-A_rr = B_r^(-1)
-A_rs = - B_r^(-1) * sum_{m=s}^{r-1} L_rm A_ms,    r > s
+```math
+\begin{aligned}
+A_{r,r} &= B_r^{-1}, \\
+A_{r,s} &= -B_r^{-1}\sum_{m=s}^{r-1} L_{r,m}A_{m,s}, \quad r > s .
+\end{aligned}
 ```
 
 This recurrence is the algorithmic shape behind the blocksolve producer. The
