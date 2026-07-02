@@ -942,10 +942,12 @@ is strictly lower triangular inside a fixed chunk:
 (I + M)^(-1) = I - M + M^2 - M^3 + ...
 ```
 
-The series is finite in principle. The engineering point is not "use a random
-approximation instead of the operator." The point is that the causal correction
-has a lower-triangular inverse/update structure that can be blocked and
-specialized.
+For a `C x C` strictly lower-triangular matrix, `M` is nilpotent:
+`M^C = 0`. So this is not an infinite approximation; it is an exact finite
+series that truncates after at most `C - 1` powers. The engineering point is not
+"use a random approximation instead of the operator." The point is that the
+causal correction has a lower-triangular inverse/update structure that can be
+blocked and specialized.
 
 For the production `chunk64, DK=128` path, TileOps splits the chunk into four
 16-token blocks. If `B_r = I + M_rr` is the diagonal block and `L_rs = M_rs`
