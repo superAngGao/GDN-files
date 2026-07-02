@@ -383,6 +383,9 @@ companion technical report, `gdn_prefill_ako_technical_report.md`, keeps the
 full evidence ladder, adapter rows, rejected candidates, ABI caveats, ablation
 details, and reproduction metadata.
 
+The technical report is the readable evidence report; `tutorial_v4_si.md` is
+the artifact index and supplementary guardrail file.
+
 The supporting audit trail lives in `tutorial_v4_si.md`, the companion report,
 and the archived evidence files:
 

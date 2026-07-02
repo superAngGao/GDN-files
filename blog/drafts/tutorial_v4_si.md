@@ -19,10 +19,10 @@ than the spine of the story.
 
 ### SI.1 Source Similarity Is Not Performance Equality
 
-Studying FlashQLA was not a mechanical copy-and-paste exercise. The first
-question was whether the same source-level skeleton preserved the same
-lowering behavior in the current TileOps TileLang environment. It did not
-always do so automatically.
+Studying FlashQLA was a source-level adaptation, not a direct wrapper around
+the upstream kernel. The first question was whether the same source-level
+skeleton preserved the same lowering behavior in the current TileOps TileLang
+environment. It did not always do so automatically.
 
 In the migration experiments, one source-equivalent shape failed to recover
 the intended TMA-specialized path:
@@ -205,11 +205,11 @@ This experiment-adapter table alone is not the complete FlashQLA attribution
 story. The A/replay cross-ablation below adds the missing split: with
 public FlashQLA TL0.1.8 `A/g` fixed, TileOps replay reaches `0.542807 ms`; with
 the TL0.1.8-lowering external prepare row, cached TileOps replay is
-`0.542159 ms`; and the public FlashQLA replay anchor is `0.860569 ms`. That means the final story
-is not just "CP-split plus better A." On this tested shape, the TileOps-owned
-replay/output implementation also contributes an independent speedup. The
-article should still avoid saying V5 is a faithful FlashQLA reproduction,
-because V5 is a generic-A bridge row rather than a public FlashQLA row.
+`0.542159 ms`; and the public FlashQLA replay anchor is `0.860569 ms`. That
+means the final story is not only "CP-split plus better A." On this tested
+shape, the TileOps-owned replay/output implementation also contributes an
+independent speedup. V5 is not a one-to-one FlashQLA reproduction; it is a
+generic-A bridge row rather than a public FlashQLA row.
 
 Nearby numbers that appear in the article and evidence package have different
 meanings:

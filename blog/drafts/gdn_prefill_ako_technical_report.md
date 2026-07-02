@@ -76,10 +76,10 @@ In this project, the agent was useful in three different roles:
 That boundary matters. TileOps did not invent the CP-split replay schedule.
 The contribution was to study, validate, port, tune, dispatch, benchmark, and
 productionize the FlashQLA-style schedule inside TileOps, combined with
-TileOps' own A producer. At the same time, the work was not "just copying
-FlashQLA": the TileOps path includes an owned BTHD production implementation,
-a faster specialized A producer, shape-aware dispatch, correctness validation,
-and production benchmark integration.
+TileOps' own A producer. At the same time, the work was not a direct wrapper
+around the upstream FlashQLA kernel: the TileOps path includes an owned BTHD
+production implementation, a faster specialized A producer, shape-aware
+dispatch, correctness validation, and production benchmark integration.
 
 This article therefore uses a three-level structure rather than a chronological
 round diary. The performance story should also be read as a sequence of
@@ -781,8 +781,8 @@ flowchart LR
 ```
 
 This map is deliberately blunt. It prevents both bad stories: TileOps did not
-invent FlashQLA's CP-split replay schedule, and the TileOps work was not just
-reproducing a finished FlashQLA kernel.
+invent FlashQLA's CP-split replay schedule, and the TileOps work was not a
+one-to-one reproduction of a finished FlashQLA kernel.
 
 ### 4.1 Expert Reference: FlashQLA CP-Split Replay
 
