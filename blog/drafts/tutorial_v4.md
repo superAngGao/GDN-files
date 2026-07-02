@@ -377,7 +377,14 @@ which results are safe to publish.
 
 ## Supporting Information
 
-The audit trail lives in `tutorial_v4_si.md` and the archived evidence files:
+This article is the publication-oriented case study. It keeps the main path
+compact: problem, mechanism, result, and reusable engineering lessons. The
+companion technical report, `gdn_prefill_ako_technical_report.md`, keeps the
+full evidence ladder, adapter rows, rejected candidates, ABI caveats, ablation
+details, and reproduction metadata.
+
+The supporting audit trail lives in `tutorial_v4_si.md`, the companion report,
+and the archived evidence files:
 
 - formal `64K/H16` rows and historical local diagnostics;
 - A/replay cross-ablation and rejected current-TL KKT rows;
