@@ -19,8 +19,7 @@ On the refreshed H200 serving-shape sweep below, the TileOps production
 dispatch path is faster than the recorded FLA reference and faster than the
 public FlashQLA TL0.1.8 anchor under the documented benchmark contracts. The
 FlashQLA comparison is a public-environment comparison, not a controlled
-same-lowering attribution experiment. The FLA row is a recorded vendored
-reference unless package identity is explicitly verified.
+same-lowering attribution experiment.
 
 | Shape | TileOps production dispatch | Recorded FLA reference | Public FlashQLA TL0.1.8 anchor | TileOps / FLA throughput | TileOps / FlashQLA throughput |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -29,6 +28,9 @@ reference unless package identity is explicitly verified.
 | `128K/H16` | `1.2284 ms` | `16.3385 ms` | `2.6055 ms` | `13.30x` | `2.12x` public-env |
 | `64K/H32` | `1.2238 ms` | `10.2402 ms` | `2.5942 ms` | `8.37x` | `2.12x` public-env |
 | `64K/H64` | `2.3085 ms` | `18.9782 ms` | `6.7233 ms` | `8.22x` | `2.91x` public-env |
+
+The FLA row is a recorded vendored reference unless package identity is
+explicitly verified; SI records the source and version caveats.
 
 The main lesson is not that an agent magically invented a better GPU kernel.
 It is that agentic optimization becomes useful when the problem is made
@@ -121,15 +123,13 @@ contract. Each candidate needed four gates:
 4. **Decision log.** Record why a candidate is accepted, rejected, or kept only
    as diagnostic evidence.
 
-The evidence lanes are deliberately separated:
+How to read the rest:
 
-| Evidence lane | What it supports | What it does not support |
-| --- | --- | --- |
-| production dispatch sweep | final serving-surface result | single-variable algorithm attribution |
-| same-input A/replay ablation | prepare-A attribution around Section 11 | production wrapper or dispatch claims |
-| historical local diagnostics | why the agent pursued or rejected a direction | final public speedup claims |
-| public FlashQLA anchor | external schedule/performance reference | same-lowering replay attribution |
-| rejected rows | boundary of the search | performance claims |
+- the production dispatch sweep is the headline serving result;
+- same-input A/replay ablations explain prepare-A attribution;
+- historical local diagnostics explain why a candidate was pursued or rejected;
+- public FlashQLA rows are external anchors, not same-lowering attribution;
+- rejected rows define search boundaries, not performance claims.
 
 This is the difference between agentic search and free-form code generation.
 The agent can propose TileLang rewrites, but every rewrite has to pass through
@@ -261,6 +261,10 @@ U &= A R_V .
 \end{aligned}
 ```
 
+The exact beta/gate placement is ABI-dependent. This formula shows the
+operator-level interaction; the production path may split factors between the A
+producer and the replay/output kernel.
+
 Why does a lower-triangular solve appear at all? A small three-token sketch is
 enough. Suppose the raw write at token `i` is corrected by the residuals from
 earlier tokens:
@@ -303,16 +307,14 @@ A_{r,s} &= -B_r^{-1}\sum_{m=s}^{r-1} L_{r,m}A_{m,s}, \quad r > s .
 \end{aligned}
 ```
 
-The arithmetic story is not "fewer FLOPs everywhere." A dense `64 x 64` Gram
-over `DK=128` is `524,288` MACs per chunk/head. The strict causal off-diagonal
-interaction is `258,048` MACs, and the lower-triangular reference including
-diagonal is `266,240` MACs. The blocked shape computes ten dense `16 x 16`
-Gram blocks, or `327,680` MACs, plus twenty-four `16 x 16 x 16` small GEMMs in
-the solve/composition tail, or `98,304` MACs. The win is the regular,
-GEMM-shaped, parallel schedule: it gives the backend something much better to
-execute than a serial forward solve.
+The arithmetic story is not "fewer FLOPs everywhere." The blocked producer
+does more arithmetic than the minimal strictly triangular interaction, but it
+exposes the work as regular GEMM-shaped blocks. In the solve/composition tail,
+the TileOps blocked shape is about `1.097x` the MAC count of the FlashQLA-style
+forward solve/combine tail. The advantage is not magic arithmetic reduction;
+it is a more parallel backend-friendly shape. SI gives the full MAC accounting.
 
-The clean Section 11 A-producer ablation uses complete end-to-end rows:
+The clean same-input A-producer ablation uses complete end-to-end rows:
 
 | Row | Prepare-A producer | Replay/output | `64K/H16` latency | Meaning |
 | --- | --- | --- | ---: | --- |
@@ -324,9 +326,9 @@ Three nearby numbers have different meanings:
 
 | Number | Evidence lane | Meaning |
 | ---: | --- | --- |
-| `0.715062 ms` | V5/V6 adapter bridge | compatibility evidence under the same CP downstream ABI |
-| `0.695237 ms` | Section 11 same-input ablation | the headline Neumann prepare comparison |
-| `0.692026 ms` / `~0.6951 ms` | production wrapper / surface sweep | production-context evidence, not the Section 11 proof |
+| `0.715062 ms` | adapter bridge | compatibility evidence under the same CP downstream ABI |
+| `0.695237 ms` | same-input A-producer ablation | the headline Neumann prepare comparison |
+| `0.692026 ms` / `~0.6951 ms` | production wrapper / surface sweep | production-context evidence, not the ablation proof |
 
 The native current-TL FlashQLA-style KKT producer remains a rejected diagnostic
 at `64K/H16`; the no-Neumann row above uses the TL0.1.8-lowering harness.
