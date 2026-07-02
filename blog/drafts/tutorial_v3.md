@@ -980,6 +980,17 @@ not a magical disappearance of arithmetic; it is turning the necessary causal
 correction into a lower-blocked, tensor-core-friendly GEMM schedule with a
 small fixed block-composition tail.
 
+Against the FlashQLA TL0.1.8 forward KKT producer, the split is instructive.
+FlashQLA's source-level path first computes a full `64 x 64` Gram, about
+`524,288` MACs per chunk/head, then uses a forward hierarchical solve/combine
+tail of about `89,600` MACs. TileOps spends slightly more on the inverse tail
+(`98,304` MACs), but much less on the Gram stage (`327,680` MACs). The complete
+prepare-A estimate is therefore about `425,984` MACs for TileOps versus
+`613,888` MACs for that FlashQLA KKT path. So the advantage is not only
+parallelism, and not only tensor cores: it is a different blocked arithmetic
+decomposition that reduces the Gram work while keeping the remaining work
+regular enough to run as small GEMMs.
+
 The accepted variant should therefore be described as a **blocked-inverse /
 Neumann-style A producer**, not as a proof that the materialized `A` is
 identical to the generic exact/KKT-style producer. Direct intermediate-`A`

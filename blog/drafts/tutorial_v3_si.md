@@ -462,6 +462,57 @@ This excludes scalar beta/gate exponent and scaling work, stores, and the
 downstream replay/output kernel. Under the usual FLOP convention where one
 multiply-add is counted as two FLOPs, double the MAC counts.
 
+For comparison, the FlashQLA TL0.1.8 `kkt_solve` source-level path computes a
+full chunk Gram before its forward hierarchical solve/combine:
+
+```text
+full Gram        = 64 * 64 * 128 = 524,288 MACs
+4 diagonal 16x16 forward solves
+                 = 4 * 16 * sum_{s=1}^{15} s = 7,680 MACs
+first 16-block combine level
+                 = 2 passes * 2 blocks * 16^3 = 16,384 MACs
+second 32-block combine level
+                 = 2 * 32^3 = 65,536 MACs
+FlashQLA KKT estimate
+                 = 524,288 + 7,680 + 16,384 + 65,536
+                 = 613,888 MACs per chunk/head
+```
+
+This comparison is source-level arithmetic accounting, not a generated-SASS
+instruction count. It shows the useful distinction:
+
+```text
+FlashQLA solve/combine tail:  89,600 MACs
+TileOps blocksolve tail:      98,304 MACs
+```
+
+The TileOps tail is slightly larger, but its Gram stage is smaller:
+
+```text
+FlashQLA Gram: 524,288 MACs
+TileOps Gram:  327,680 MACs
+```
+
+So the complete prepare-A producer estimate is:
+
+```text
+FlashQLA TL0.1.8 KKT: 613,888 MACs per chunk/head
+TileOps blocksolve A: 425,984 MACs per chunk/head
+```
+
+For `B=1, T=65536, H=16, chunk64`, this gives:
+
+```text
+FlashQLA TL0.1.8 KKT: 10,057,940,992 MACs
+TileOps blocksolve A:  6,979,321,856 MACs
+```
+
+The blog should therefore avoid the oversimplified statement that the
+blocked-inverse path "does more arithmetic but is more parallel." A more exact
+statement is: the blocksolve tail trades a little extra combine work for a
+regular small-GEMM structure, while the producer as a whole reduces the Gram
+work enough to lower the estimated prepare-A MAC count.
+
 #### SI.3.5 What Still Needs Refresh Before Publication
 
 The formal `64K/H16` package and the five-shape production-surface sweep replace
