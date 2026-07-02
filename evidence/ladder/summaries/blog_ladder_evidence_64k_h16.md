@@ -7,17 +7,20 @@ blog does not mix attribution lanes.
 Source evidence:
 
 - Historical local summary:
-  `experiments/gated_deltanet_prefill_blog_ladder/summaries/formal_64k_h16_historical_local.md`
+  `evidence/ladder/summaries/formal_64k_h16_historical_local.md`
 - Current TileOps summary:
-  `experiments/gated_deltanet_prefill_blog_ladder/summaries/formal_64k_h16_current_gpu4_rerun.md`
+  `evidence/ladder/summaries/formal_64k_h16_current_gpu4_rerun.md`
 - Section 11 ablation:
-  `experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_a_producer_ablation_64k_h16.md`
+  `evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`
 - Historical local JSONL:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/formal_64k_h16_historical_local.jsonl`
+  `evidence/ladder/results/formal_64k_h16_historical_local.jsonl`
 - Current TileOps JSONL:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/formal_64k_h16_current_gpu4_rerun.jsonl`
+  `evidence/ladder/results/formal_64k_h16_current_gpu4_rerun.jsonl`
 - Shape: `B=1,T=65536,H=16,DK=128,DV=128,chunk=64,fp16,BTHD`
-- Input artifact: `experiments/gated_deltanet_prefill_blog_ladder/results/artifacts/formal_64k_h16_seed20260630.pt`
+- Input artifact: local harness artifact
+  `experiments/gated_deltanet_prefill_blog_ladder/results/artifacts/formal_64k_h16_seed20260630.pt`
+  (large tensor artifact not mirrored into this repo; use the hash below for
+  identity)
 - Input hash: `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`
 - Timer: CUPTI kernel-only with CUDA-event fallback; warmup `10`, repeat `50`, trials `3`
 - GPU contract: H200 / GPU4
@@ -91,7 +94,7 @@ The clean Section 11 table should use full end-to-end rows:
 | --- | ---: | --- |
 | public FlashQLA full | 1.306838 | external TL0.1.8 anchor, refreshed on GPU3 |
 | FlashQLA-style prepare A + TileOps replay/output full row | 0.815029 | measured TL0.1.8 lowered KKT injected via external launcher plus TileOps replay |
-| TileOps blocksolve A + TileOps replay/output full row | 0.715062 | same-scope measured TileOps prepare-A row |
+| TileOps blocksolve A + TileOps replay/output full row | 0.691642 | same-scope measured TileOps prepare-A row |
 
 Replay-only and component-sum rows can stay in supporting diagnostics, but
 they should not replace the headline Section 11 rows. The native current-TL KKT
@@ -214,7 +217,7 @@ Supported:
   external A/g, TileOps replay is `0.542159 ms`; with TileOps A/g fixed, the
   same replay is `0.542905 ms`. Under the same TileOps `bench_kernel` timing
   path, TL0.1.8-lowering prepare plus TileOps replay is `0.815029 ms`, and
-  TileOps full producer plus replay is `0.715062 ms`.
+  TileOps full producer plus replay is `0.691642 ms`.
 - `tileops_owned_cp_generic_a -> tileops_owned_cp_blocked_inverse_a` supports
   only an experiment-adapter bridge under the same CP downstream ABI; it should
   not be presented as the main A-producer ablation.

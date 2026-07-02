@@ -103,7 +103,7 @@ mapping is maintained in the supporting information and evidence inventory.
 | local prepare specialization | local AKO improves the fixed-contract path, but does not change replay depth | `10.8353 ms` | `74.1%` | `12.1%` |
 | local wall | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `5.5566 ms` | `144.4%` | `23.5%` |
 | FlashQLA-style A + TileOps replay | after studying FlashQLA and improving replay/output, TileOps reaches the public FlashQLA performance neighborhood before Neumann | `0.815029 ms` | `984.7%` | `160.3%` |
-| Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm | `0.715062 ms` | `1122.4%` | `182.8%` |
+| Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm | `0.691642 ms` | `1160.4%` | `188.9%` |
 
 **External `64K/H16` anchors**
 
@@ -966,9 +966,11 @@ blocks with a fixed sequence of small GEMMs in shared memory.
 
 The multiply-add accounting makes the tradeoff concrete. Counting one
 multiply-add as one MAC, a dense `64 x 64` Gram over `DK=128` would cost
-`64 * 64 * 128 = 524,288` MACs per chunk/head. The true causal lower triangle
-with diagonal has `64 * 65 / 2` token pairs, or `266,240` MACs. The production
-blocked shape computes ten dense `16 x 16` Gram blocks, so the Gram stage costs
+`64 * 64 * 128 = 524,288` MACs per chunk/head. The strict causal off-diagonal
+interaction has `64 * 63 / 2` token pairs, or `258,048` MACs; if the diagonal is
+included as a lower-triangular Gram reference, the count is `64 * 65 / 2 * 128 =
+266,240` MACs. The production blocked shape computes ten dense `16 x 16` Gram
+blocks, so the Gram stage costs
 `10 * 16 * 16 * 128 = 327,680` MACs: more than the exact elementwise lower
 triangle because the four diagonal blocks keep a dense GEMM shape, but much
 less than the full dense grid. The block inverse/composition then adds
@@ -977,7 +979,7 @@ prepare-A producer performs about `425,984` GEMM MACs per chunk/head before
 scalar beta/gate work. For the formal `B=1, T=64K, H=16, chunk64` row, that is
 `16,384` chunk/heads, or about `6.98B` prepare-A GEMM MACs. The win is therefore
 not a magical disappearance of arithmetic; it is turning the necessary causal
-correction into a lower-blocked, tensor-core-friendly GEMM schedule with a
+correction into a lower-blocked, regular GEMM-shaped schedule with a
 small fixed block-composition tail.
 
 If we compare only the inversion strategy, the arithmetic story is simple:
@@ -1055,13 +1057,13 @@ lowered KKT kernel through an external launcher, then feeding its `A` plus
 current `chunk_local_cumsum` into the unchanged TileOps PR1596 replay path.
 
 Evidence note:
-`experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_a_producer_ablation_64k_h16.md`.
+`../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`.
 
 | Row | Prepare-A producer | Replay/output | Timing scope | Correctness | `64K/H16` latency | Use |
 | --- | --- | --- | --- | --- | ---: | --- |
 | public FlashQLA full | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | pass / public anchor | `1.306838 ms` | external baseline |
 | FlashQLA-style prepare A + TileOps replay | TL0.1.8 lowered FlashQLA KKT via external launcher | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.815029 ms` | measured no-Neumann combined row |
-| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.715062 ms` | same-scope measured TileOps row |
+| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs recorded vendored FLA reference | `0.691642 ms` | same-scope measured TileOps row |
 
 The native current-TL FlashQLA-style KKT producer is still rejected at
 `64K/H16`, so the blog should not report its latency as performance evidence.
@@ -1075,7 +1077,7 @@ direct diagnostic stayed producer-local: `g_cum` matched exactly, while
 current-TL `A` contained hundreds of nonfinite values and saturated near fp16
 limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
 
-The filled no-Neumann row is the clean comparison against the `0.715062 ms`
+The filled no-Neumann row is the clean comparison against the `0.691642 ms`
 TileOps prepare-A row. Replay-only and component diagnostics can remain in the
 evidence note, but they should not be the headline A-producer claim. The caveat
 is that this row is an external TL0.1.8-lowering harness row, not a native

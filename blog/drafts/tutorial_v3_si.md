@@ -199,7 +199,7 @@ The FlashQLA-alignment node is not V5. It is the A/replay cross-ablation:
 TL0.1.8 lowered FlashQLA KKT injected through an external launcher plus
 TileOps replay gives a measured `0.815029 ms` full path, faster than refreshed
 public FlashQLA full `1.306838 ms`; then TileOps blocksolve A plus the same
-replay family gives `0.715062 ms`.
+replay family gives `0.691642 ms` in the clean Section 11 same-input row.
 
 This experiment-adapter table alone is not the complete FlashQLA attribution
 story. The A/replay cross-ablation below adds the missing split: with
@@ -294,9 +294,9 @@ FlashQLA TL0.1.8 tensors, including `A`, `g_cum`, `o`, and `final_state`, and
 then runs TileOps replay on the same `A/g` artifact.
 
 Evidence notes:
-`experiments/gated_deltanet_prefill_blog_ladder/summaries/section11_a_producer_ablation_64k_h16.md`
+`../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`
 and
-`experiments/gated_deltanet_prefill_blog_ladder/summaries/a_replay_cross_ablation_64k_h16.md`.
+`../../evidence/ladder/summaries/a_replay_cross_ablation_64k_h16.md`.
 The full external-lowering and Neumann rows use
 `benchmarks.benchmark_base.bench_kernel`. The machine-readable evidence is
 split across the archived Section 11 JSONL files listed in SI.3.6 rather than a
@@ -312,7 +312,7 @@ single combined JSONL file.
 | `TL018-lowering/TO replay` | produced TL0.1.8-lowering A/g | TileOps PR1596 CP replay | replay-only | public TL0.1.8 artifact | `0.542159 ms` |
 | `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | `0.542807 ms` |
 | `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | `0.542905 ms` |
-| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | public TL0.1.8 artifact | `0.715062 ms` |
+| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | `0.691642 ms` |
 
 This changes the explanation. V5 should not be described as a faithful
 FlashQLA reproduction. It is a controlled bridge row that keeps a conservative
@@ -357,7 +357,7 @@ path, but slower than the same-input TileOps full row:
 
 ```text
 1.306838 ms / 0.815029 ms = 1.60x
-0.815029 ms / 0.715062 ms = 1.14x
+0.815029 ms / 0.691642 ms = 1.18x
 ```
 
 That row is a measured single host-process path, but it is still an
@@ -370,7 +370,7 @@ adapter jump as the main A-producer proof. The cleaner ablation is:
 
 ```text
 TL0.1.8-lowering prepare + TileOps replay: 0.815029 ms
-TileOps blocksolve producer + TileOps replay:       0.715062 ms
+TileOps blocksolve producer + TileOps replay:       0.691642 ms
 ```
 
 We also tried the native current-TL measured combined row:
@@ -426,7 +426,14 @@ For comparison, a full dense `64 x 64` Gram would be:
 64 * 64 * 128 = 524,288 MACs
 ```
 
-The elementwise causal lower triangle with diagonal would be:
+The strict causal off-diagonal interaction would be:
+
+```text
+(64 * 63 / 2) * 128 = 258,048 MACs
+```
+
+If the diagonal is counted as part of a lower-triangular Gram reference, the
+count becomes:
 
 ```text
 (64 * 65 / 2) * 128 = 266,240 MACs

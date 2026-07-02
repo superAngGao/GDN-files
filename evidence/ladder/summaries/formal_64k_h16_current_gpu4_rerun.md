@@ -7,7 +7,10 @@
 - Final candidate rows: 1
 - External anchor rows: 1
 - Shape: B=1,T=65536,H=16,DK=128,DV=128,chunk=64
-- Input artifact: `experiments/gated_deltanet_prefill_blog_ladder/results/artifacts/formal_64k_h16_seed20260630.pt`
+- Input artifact: local harness artifact
+  `experiments/gated_deltanet_prefill_blog_ladder/results/artifacts/formal_64k_h16_seed20260630.pt`
+  (large tensor artifact not mirrored into this repo; use the hash below for
+  identity)
 - Input hash: `sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513`
 - Evidence lane note: `final_candidate` rows and `causal_ladder_row` rows are reported separately; this summary does not compute causal speedup between them.
 
