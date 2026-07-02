@@ -151,10 +151,13 @@ external-launcher path plus TileOps replay, archived in
 
 Do not claim that V5 is a full FlashQLA reproduction. It is not.
 
-Do not claim that the `producer + replay` sum is a measured single fused full
-path. The producer part is measured in the TL0.1.8 FlashQLA docker, while the
-TileOps replay part is measured in the current TileOps harness. The sum is a
-useful cross-ablation estimate, not a single-kernel measurement.
+In this older diagnostic file, do not claim that the `producer + replay` sum
+is a measured single fused full path. The producer part is measured in the
+TL0.1.8 FlashQLA docker, while the TileOps replay part is measured in the
+current TileOps harness. The sum is a useful cross-ablation estimate, not a
+single-kernel measurement. The current headline Section 11 row is the measured
+TL0.1.8-lowering external-launcher full path documented in
+`evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`.
 
 Do not use the current-TL FlashQLA migration A producer as the public FlashQLA
 producer at 64K/H16. In current-TL migration experiments, FQ A rows produced
