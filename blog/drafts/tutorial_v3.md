@@ -1204,6 +1204,7 @@ Detailed evidence lives in `tutorial_v3_si.md`, including:
 | formal `64K/H16` adapter rows | evidence bookkeeping, not the article's final narrative shape |
 | A/replay cross-ablation | supports attribution detail without interrupting Level 3 flow |
 | source, ABI, and FLA-version caveats | necessary publication safeguards |
+| reproduce headline rows | command and archived JSONL paths for the formal `64K/H16` evidence |
 
 Before publication:
 

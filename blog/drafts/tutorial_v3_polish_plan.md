@@ -225,11 +225,16 @@ separate code-shape notes.
 
 ### P2 - Reproducibility Entry
 
-- [ ] Add a "Reproduce the headline rows" section or SI entry.
-- [ ] Include environment, commit, data artifact, command, expected output, and
+- [x] Add a "Reproduce the headline rows" section or SI entry.
+- [x] Include environment, commit, data artifact, command, expected output, and
       where raw JSONL is stored.
 - [ ] Keep the reproduction path minimal: one command for the main 64K/H16 rows
       and one command for the five-shape production surface, if practical.
+
+Current status: `tutorial_v3_si.md` now has `SI.3.6 Reproduce The Headline Rows`
+with archived raw JSONL paths and a rerun command for the formal `64K/H16`
+harness rows. The five-shape production surface is archived as raw JSONL; a
+single-command public rerun remains a tooling TODO.
 
 ## Review Gates
 

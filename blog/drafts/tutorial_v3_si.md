@@ -408,6 +408,58 @@ need to be refreshed if the benchmark contract changes:
 | generated-code archive for TMA/WGMMA claims | needed before making low-level lowering claims |
 | verified FLA package identity | needed before saying externally verified FLA 0.5.1 without caveat |
 
+#### SI.3.6 Reproduce The Headline Rows
+
+The archived evidence files are the publication source of truth:
+
+| Evidence target | Archived files |
+| --- | --- |
+| Main `64K/H16` ladder and writing summary | `../../evidence/ladder/summaries/blog_ladder_evidence_64k_h16.md`, `../../evidence/ladder/results/formal_64k_h16_current_gpu4_rerun.jsonl`, `../../evidence/ladder/results/formal_64k_h16_historical_local.jsonl` |
+| A/replay cross-ablation | `../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`, `../../evidence/ladder/results/section11_tileops_benchmark_ext_lowering_vs_neumann_64k_h16.jsonl` |
+| Production dispatch surface | `../../evidence/ladder/results/production_surface_tileops_vs_fla_20260701_tmpdir.jsonl`, `../../evidence/ladder/results/production_surface_flashqla_20260701.jsonl` |
+
+To rerun the current `64K/H16` harness rows from the TileOps repository root:
+
+```bash
+python experiments/gated_deltanet_prefill_blog_ladder/run_ladder.py \
+  --variant ref_fla_051 \
+  --variant generic_a_legacy \
+  --variant tileops_owned_cp_generic_a \
+  --variant tileops_owned_cp_blocked_inverse_a \
+  --variant tileops_final_dispatch \
+  --seq-len 65536 --heads 16 --dim-k 128 --dim-v 128 --chunk-size 64 \
+  --dtype fp16 --seed 20260630 --warmup 10 --repeat 50 --trials 3 \
+  --gpu-contract GPU4/H200 \
+  --production-root /home/ga/TileOPs-pr1596 \
+  --artifact experiments/gated_deltanet_prefill_blog_ladder/results/artifacts/formal_64k_h16_seed20260630.pt \
+  --output experiments/gated_deltanet_prefill_blog_ladder/results/formal_64k_h16_reproduce.jsonl
+
+python experiments/gated_deltanet_prefill_blog_ladder/summarize_ladder.py \
+  --input experiments/gated_deltanet_prefill_blog_ladder/results/formal_64k_h16_reproduce.jsonl \
+  --output experiments/gated_deltanet_prefill_blog_ladder/summaries/formal_64k_h16_reproduce.md
+```
+
+Expected shape/contract:
+
+```text
+B=1, T=65536, H=16, DK=DV=128, chunk64, fp16, BTHD
+seed=20260630
+input hash should match the archived artifact when the same artifact is reused:
+sha256:a8987a2c6d16c658a1cb8ed95e409d973a3f736e2019d8719b143f18b4741513
+```
+
+The generated summary should show `publication_eligible=true` for the accepted
+formal rows and should keep `tileops_final_dispatch` outside the controlled
+causal ladder.
+
+The A/replay cross-ablation uses a specialized external-lowering launcher. Its
+archived machine-readable result is listed above; rerun it only in the
+TL0.1.8-lowering environment used for that experiment. The production-surface
+sweep is also archived as raw JSONL. A compact single-command surface rerun is
+still a tooling TODO; until it exists, cite the archived JSONL rather than
+pretending the five-shape TileOps/FlashQLA sweep is reproduced by the single
+`run_ladder.py` command above.
+
 ### SI.4 Remaining Publication Guardrails
 
 Before publication:
