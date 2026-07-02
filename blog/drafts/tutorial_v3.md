@@ -1,8 +1,8 @@
 # Agentic TileLang Kernel Tuning: Gated DeltaNet Prefill
 
-Draft note: this is a working tutorial draft. Detailed evidence, rejected rows,
-ABI caveats, and benchmark metadata live in `tutorial_v3_si.md`. Figures are
-Mermaid placeholders for final publication graphics.
+Reader note: detailed evidence, rejected rows, ABI caveats, and benchmark
+metadata live in `tutorial_v3_si.md`. The diagrams below are lightweight
+Mermaid sketches.
 
 ## 0. Problem, Result, And How To Read The Numbers
 
@@ -16,7 +16,10 @@ combines local agentic optimization, a FlashQLA-inspired CP-split replay
 schedule, and a human blocked-inverse / Neumann-style prepare algorithm. On the
 refreshed serving-shape sweep, the production dispatch path is faster than both
 the recorded FLA reference and the public FlashQLA TL0.1.8 anchor under the
-documented benchmark contracts.
+documented benchmark contracts. The FlashQLA comparison is a
+public-environment comparison, not a controlled same-lowering attribution
+experiment; the FLA row is a recorded vendored reference unless otherwise
+stated.
 
 This is not a story about an AI magically inventing a faster GPU kernel. It is
 a story about how agents become useful when a kernel problem is made
@@ -131,8 +134,8 @@ Component diagnostics, failed candidates, and migration/lowering anchors belong
 in the supporting evidence or appendix. A rejected or unresolved row may appear
 only as diagnostic context; it must not be read as a formal result.
 
-The final article should not mix component rows, external FlashQLA anchors, and
-TileOps experiment-adapter rows into one apparent speedup ladder.
+Do not mix component rows, external FlashQLA anchors, and TileOps
+experiment-adapter rows into one apparent speedup ladder.
 
 ### 0.2 Terminology And Scope
 
@@ -142,7 +145,7 @@ different:
 | Term | Role in this article |
 | --- | --- |
 | GDN | Gated DeltaNet, a recurrent linear-attention-style operator with decay gates and delta-rule residual writes. |
-| FLA | Flash Linear Attention. The main behavioral correctness reference for full-op validation. |
+| FLA | Flash Linear Attention. The main behavioral correctness reference for full-op validation; reported here as a recorded vendored FLA reference unless package identity is explicitly verified. |
 | FlashQLA | Qwen's FlashQLA project. The source of the CP-split GDN prefill schedule and fused replay/output skeleton that TileOps later ported and productionized. |
 | TileOps | The production kernel surface discussed here: TileLang-owned BTHD prefill path, dispatch, validation, and benchmark integration. |
 | AKO | Agentic Kernel Optimization: a gated loop of hypothesis, implementation, correctness, benchmark, lowering inspection, and decision logging. |
@@ -154,11 +157,10 @@ different:
 
 The target serving shape in the main evidence package is intentionally scoped:
 `B=1`, BTHD layout, `DK=DV=128`, `chunk64`, `fp16`, and long prefill lengths.
-The article should report final numbers only after the Tier-1 correctness and
-benchmark tables have been refreshed for the final PR head and runtime
-environment.
+The reported numbers are tied to the recorded commit, timer, input artifact,
+GPU, and runtime metadata in SI.
 
-For FlashQLA comparisons, the article must keep the following caveat:
+For FlashQLA comparisons, use the following caveat:
 
 ```text
 TileOps vs FlashQLA is a public-environment comparison, not a controlled
@@ -554,9 +556,8 @@ by the same reference.
 
 Historical diagnostic evidence:
 
-Temporary historical evidence. Replace this block with refreshed component
-evidence before publication, or move it to an appendix as dated trajectory
-evidence.
+These are dated component diagnostics, not headline benchmark claims. They are
+kept here because they explain why the scale-placement candidate was accepted.
 
 **Picked variant for this node:** V-path scale placement, with historical
 replay component latency improving from `2.2725 ms` to `1.6277 ms`.
@@ -619,9 +620,9 @@ Matching the arithmetic primitive is not the same as matching the pipeline.
 
 Historical diagnostic evidence:
 
-Temporary historical evidence. Replace this block with refreshed component
-evidence before publication, or move it to an appendix as dated trajectory
-evidence.
+These are dated component diagnostics, not headline benchmark claims. They are
+kept here because they explain why the store path became a first-class tuning
+target.
 
 **Picked variant for this node:** swizzled async shared-copy store path, with
 historical TileLang component latency improving from `0.46791766 ms` to
@@ -1062,6 +1063,15 @@ mathematical analysis. Once that framing existed, the agentic loop was useful
 again: implement variants, run gates, inspect lowering, and tune inside the
 new producer shape.
 
+Three nearby numbers appear in the evidence package, and they mean different
+things:
+
+| Number | Evidence lane | Meaning |
+| ---: | --- | --- |
+| `0.715062 ms` | V5/V6 experiment-adapter bridge | Shows that the blocked-inverse producer can feed the same CP downstream ABI, but it is not the clean A-producer proof. |
+| `0.695237 ms` | Section 11 same-input A-producer ablation | The headline Neumann prepare comparison against the `0.815029 ms` TL0.1.8-lowering FlashQLA-style prepare row. |
+| `0.692026 ms` / `~0.6951 ms` | production wrapper and refreshed dispatch surface | Production-context evidence that the optimized path survives wrapper/dispatch policy; not the Section 11 proof. |
+
 Formal A-producer evidence:
 
 **Picked evidence for this node:** compare complete end-to-end rows where the
@@ -1238,7 +1248,7 @@ single `64K/H16` wrapper row is useful as an anchor, but the production claim is
 that the blocked-inverse CP path survives dispatch across `32K-128K` and
 `H16-H64` in the measured surface.
 
-### 5.5 Supporting Information And Publication Guardrails
+### 5.5 Supporting Information And Claim Guardrails
 
 Detailed evidence lives in `tutorial_v3_si.md`, including:
 
@@ -1248,10 +1258,10 @@ Detailed evidence lives in `tutorial_v3_si.md`, including:
 | prefix-scan negative result | useful technical guardrail, but not the chosen production path |
 | formal `64K/H16` adapter rows | evidence bookkeeping, not the article's final narrative shape |
 | A/replay cross-ablation | supports attribution detail without interrupting Level 3 flow |
-| source, ABI, and FLA-version caveats | necessary publication safeguards |
+| source, ABI, and FLA-version caveats | necessary claim-boundary safeguards |
 | reproduce headline rows | command and archived JSONL paths for the formal `64K/H16` evidence |
 
-Before publication:
+Keep these constraints when quoting or extending the results:
 
 1. Keep the Neumann/blocksolve formulas tied to the implementation caveat:
    TileOps uses a blocked-inverse / Neumann-style producer, and the materialized
@@ -1266,5 +1276,5 @@ Before publication:
    `DK=DV=128`, `chunk64` production path.
 6. Keep the TileOps-vs-FlashQLA public-environment caveat and avoid replay
    algorithm attribution from full-op speedups alone.
-7. Verify the FLA package identity before saying externally verified
-   `FLA 0.5.1`; otherwise keep the "recorded vendored FLA reference" caveat.
+7. Say "externally verified FLA 0.5.1" only if the package identity has been
+   checked; otherwise keep the "recorded vendored FLA reference" caveat.
