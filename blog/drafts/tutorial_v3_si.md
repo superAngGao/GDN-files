@@ -199,7 +199,7 @@ The FlashQLA-alignment node is not V5. It is the A/replay cross-ablation:
 TL0.1.8 lowered FlashQLA KKT injected through an external launcher plus
 TileOps replay gives a measured `0.815029 ms` full path, faster than refreshed
 public FlashQLA full `1.306838 ms`; then TileOps blocksolve A plus the same
-replay family gives `0.691642 ms` in the clean Section 11 same-input row.
+replay family gives `0.695237 ms` in the clean Section 11 same-input row.
 
 This experiment-adapter table alone is not the complete FlashQLA attribution
 story. The A/replay cross-ablation below adds the missing split: with
@@ -312,7 +312,7 @@ single combined JSONL file.
 | `TL018-lowering/TO replay` | produced TL0.1.8-lowering A/g | TileOps PR1596 CP replay | replay-only | public TL0.1.8 artifact | `0.542159 ms` |
 | `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | `0.542807 ms` |
 | `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | `0.542905 ms` |
-| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | `0.691642 ms` |
+| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | public TL0.1.8 artifact | `0.695237 ms` |
 
 This changes the explanation. V5 should not be described as a faithful
 FlashQLA reproduction. It is a controlled bridge row that keeps a conservative
@@ -357,7 +357,7 @@ path, but slower than the same-input TileOps full row:
 
 ```text
 1.306838 ms / 0.815029 ms = 1.60x
-0.815029 ms / 0.691642 ms = 1.18x
+0.815029 ms / 0.695237 ms = 1.17x
 ```
 
 That row is a measured single host-process path, but it is still an
@@ -370,7 +370,7 @@ adapter jump as the main A-producer proof. The cleaner ablation is:
 
 ```text
 TL0.1.8-lowering prepare + TileOps replay: 0.815029 ms
-TileOps blocksolve producer + TileOps replay:       0.691642 ms
+TileOps blocksolve producer + TileOps replay:       0.695237 ms
 ```
 
 We also tried the native current-TL measured combined row:
@@ -532,7 +532,7 @@ The archived evidence files are the publication source of truth:
 | Evidence target | Archived files |
 | --- | --- |
 | Main `64K/H16` ladder and writing summary | `../../evidence/ladder/summaries/blog_ladder_evidence_64k_h16.md`, `../../evidence/ladder/results/formal_64k_h16_current_gpu4_rerun.jsonl`, `../../evidence/ladder/results/formal_64k_h16_historical_local.jsonl` |
-| A/replay cross-ablation | `../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`, `../../evidence/ladder/summaries/a_replay_cross_ablation_64k_h16.md`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq18_to_replay.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl` |
+| A/replay cross-ablation | `../../evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`, `../../evidence/ladder/summaries/a_replay_cross_ablation_64k_h16.md`, `../../evidence/ladder/results/section11_tileops_benchmark_ext_lowering_vs_neumann_64k_h16.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq18_to_replay.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`, `../../evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl` |
 | Production dispatch surface | `../../evidence/ladder/results/production_surface_tileops_vs_fla_20260701_tmpdir.jsonl`, `../../evidence/ladder/results/production_surface_flashqla_20260701.jsonl` |
 
 To rerun the current `64K/H16` harness rows from the TileOps repository root:

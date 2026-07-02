@@ -94,7 +94,7 @@ The clean Section 11 table should use full end-to-end rows:
 | --- | ---: | --- |
 | public FlashQLA full | 1.306838 | external TL0.1.8 anchor, refreshed on GPU3 |
 | FlashQLA-style prepare A + TileOps replay/output full row | 0.815029 | measured TL0.1.8 lowered KKT injected via external launcher plus TileOps replay |
-| TileOps blocksolve A + TileOps replay/output full row | 0.691642 | same-scope measured TileOps prepare-A row |
+| TileOps blocksolve A + TileOps replay/output full row | 0.695237 | same-scope measured TileOps prepare-A row |
 
 Replay-only and component-sum rows can stay in supporting diagnostics, but
 they should not replace the headline Section 11 rows. The native current-TL KKT
@@ -217,7 +217,7 @@ Supported:
   external A/g, TileOps replay is `0.542159 ms`; with TileOps A/g fixed, the
   same replay is `0.542905 ms`. Under the same TileOps `bench_kernel` timing
   path, TL0.1.8-lowering prepare plus TileOps replay is `0.815029 ms`, and
-  TileOps full producer plus replay is `0.691642 ms`.
+  TileOps full producer plus replay is `0.695237 ms`.
 - `tileops_owned_cp_generic_a -> tileops_owned_cp_blocked_inverse_a` supports
   only an experiment-adapter bridge under the same CP downstream ABI; it should
   not be presented as the main A-producer ablation.

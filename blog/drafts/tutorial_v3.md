@@ -87,13 +87,16 @@ reference; values above `100%` mean the variant has higher throughput than the
 recorded reference. Component diagnostics still appear in the body, but they do
 not enter the headline roadmap until they have a matching full-op row.
 
-The single-shape story rows use the same formal `64K/H16` full-op harness:
-`B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`. The input artifact, GPU,
-commit, and timer details live in SI. The local-AKO rows below were rerun as
-end-to-end historical worktree checkpoints under this contract; component-only
-scale/store diagnostics are kept out of this headline table. The public-facing
-roadmap names story nodes, not internal variant IDs; the exact variant-to-code
-mapping is maintained in the supporting information and evidence inventory.
+The single-shape story rows share the same serving shape:
+`B=1,T=65536,H=16,DK=DV=128,chunk64,fp16,BTHD`, but they come from two evidence
+lanes. The early/local rows are end-to-end historical worktree checkpoints
+under the formal ladder harness. The Level 3 A-producer rows use the same-input
+Section 11 clean ablation, because that is where the TL0.1.8-lowering
+FlashQLA-style prepare row and the TileOps Neumann prepare row are directly
+paired. Component-only scale/store diagnostics are kept out of this headline
+table. The public-facing roadmap names story nodes, not internal variant IDs;
+the exact variant-to-code mapping is maintained in the supporting information
+and evidence inventory.
 
 **Controlled `64K/H16` story rows**
 
@@ -103,7 +106,7 @@ mapping is maintained in the supporting information and evidence inventory.
 | local prepare specialization | local AKO improves the fixed-contract path, but does not change replay depth | `10.8353 ms` | `74.1%` | `12.1%` |
 | local wall | BTHD/local tuning helps a lot, but the path is still a long legacy replay | `5.5566 ms` | `144.4%` | `23.5%` |
 | FlashQLA-style A + TileOps replay | after studying FlashQLA and improving replay/output, TileOps reaches the public FlashQLA performance neighborhood before Neumann | `0.815029 ms` | `984.7%` | `160.3%` |
-| Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm | `0.691642 ms` | `1160.4%` | `188.9%` |
+| Neumann prepare | human expert insight provides the blocked-inverse / Neumann-style prepare algorithm | `0.695237 ms` | `1154.4%` | `188.0%` |
 
 **External `64K/H16` anchors**
 
@@ -1063,7 +1066,7 @@ Evidence note:
 | --- | --- | --- | --- | --- | ---: | --- |
 | public FlashQLA full | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | pass / public anchor | `1.306838 ms` | external baseline |
 | FlashQLA-style prepare A + TileOps replay | TL0.1.8 lowered FlashQLA KKT via external launcher | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.815029 ms` | measured no-Neumann combined row |
-| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs recorded vendored FLA reference | `0.691642 ms` | same-scope measured TileOps row |
+| TileOps prepare A + TileOps replay | TileOps blocked-inverse / Neumann-style blocksolve A | TileOps PR1596 CP replay | full combined row | pass vs public TL0.1.8 artifact | `0.695237 ms` | same benchmark-scope TileOps row |
 
 The native current-TL FlashQLA-style KKT producer is still rejected at
 `64K/H16`, so the blog should not report its latency as performance evidence.
@@ -1077,7 +1080,7 @@ direct diagnostic stayed producer-local: `g_cum` matched exactly, while
 current-TL `A` contained hundreds of nonfinite values and saturated near fp16
 limits; the exported TL0.1.8 `A` stayed finite in `[-0.269287109375, 1.0]`.
 
-The filled no-Neumann row is the clean comparison against the `0.691642 ms`
+The filled no-Neumann row is the clean comparison against the `0.695237 ms`
 TileOps prepare-A row. Replay-only and component diagnostics can remain in the
 evidence note, but they should not be the headline A-producer claim. The caveat
 is that this row is an external TL0.1.8-lowering harness row, not a native

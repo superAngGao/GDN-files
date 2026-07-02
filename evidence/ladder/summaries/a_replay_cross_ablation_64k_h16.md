@@ -36,6 +36,12 @@ is recorded as a rejected diagnostic rather than a performance row.
 
 ## Results
 
+This file is retained as a replay-side diagnostic. The headline Section 11
+full end-to-end A-producer rows are maintained in
+`evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`, including
+the measured TL0.1.8-lowering full row and the same benchmark-scope TileOps
+Neumann row.
+
 | Row | A producer | Replay/output | Timing scope | Correctness reference | Latency ms | Use |
 | --- | --- | --- | --- | --- | ---: | --- |
 | `FQ/FQ` | public FlashQLA TL0.1.8 KKT | public FlashQLA TL0.1.8 CP replay | full public op | public FlashQLA self row | 1.304489 | External anchor. |
@@ -43,7 +49,7 @@ is recorded as a rejected diagnostic rather than a performance row.
 | `FQ/FQ replay` | exported public FlashQLA A/g | public FlashQLA TL0.1.8 CP replay | `cp_preprocess + fused_gdr_fwd` | component timing only | 0.864754 | Replay-side public anchor. |
 | `FQ18/TO` | exported public FlashQLA TL0.1.8 A/g | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.542807 | Refreshed formal Section 11 row. Tests public FlashQLA A/g plus TileOps replay. |
 | `TO/TO replay` | TileOps blocksolve A | TileOps PR1596 CP replay | replay-only | recorded vendored FLA reference | 0.542905 | Refreshed formal Section 11 row. Same replay path with TileOps A/g. |
-| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | 0.691642 | Refreshed formal Section 11 row. Same-input TileOps producer plus replay. |
+| `TO/TO full` | TileOps blocksolve A | TileOps PR1596 CP replay | include producers | recorded vendored FLA reference | 0.691642 | Older recorded-FLA diagnostic; not the headline Section 11 full row. |
 
 ## Immediate Interpretation
 
@@ -80,8 +86,9 @@ TileOps A + TileOps replay: 0.542905 ms
 So the replay/output speed improvement is not merely a side effect of using
 TileOps A.
 
-There is also an A-producer-side improvement. A conservative cross-environment
-estimate for "public FlashQLA producer + TileOps replay" is:
+There is also an A-producer-side improvement. This older diagnostic used a
+conservative cross-environment estimate for "public FlashQLA producer +
+TileOps replay":
 
 ```text
 0.471943 ms + 0.542807 ms = 1.014750 ms
@@ -93,13 +100,15 @@ That is faster than public FlashQLA full path:
 1.304489 ms / 1.014750 ms = 1.29x
 ```
 
-but still slower than the same-input TileOps full cross-ablation row:
+but still slower than the older recorded-FLA TileOps full diagnostic:
 
 ```text
 1.014750 ms / 0.691642 ms = 1.47x
 ```
 
-This supports the cleaner narrative:
+The publication-facing full-row comparison is now the measured Section 11
+table, not this component-sum estimate. This diagnostic still supports the
+cleaner narrative:
 
 ```text
 FlashQLA contributes the production-grade CP-split schedule idea.
@@ -154,12 +163,12 @@ non-finite output at 64K and are unsuitable for public attribution.
 - Public FlashQLA TL0.1.8 export:
   `/home/ga/Documents/gdn_kernel_bench_2026-06-18/results/flashqla_cross_ablation/fq_tl018_export_64k_h16.jsonl`
 - Refreshed public FlashQLA A/g + TileOps replay row:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq18_to_replay.jsonl`
+  `evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq18_to_replay.jsonl`
 - Refreshed same-input TileOps full row:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`
+  `evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_full.jsonl`
 - Refreshed same-input TileOps replay-only row:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`
+  `evidence/ladder/results/section11_a_producer_ablation_64k_h16_to_to_replay.jsonl`
 - Rejected measured current-TL FlashQLA-style producer + TileOps replay rows:
-  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`
-  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`
-  `experiments/gated_deltanet_prefill_blog_ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl`
+  `evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full.jsonl`
+  `evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_legacy.jsonl`
+  `evidence/ladder/results/section11_a_producer_ablation_64k_h16_fq_current_to_full_wgmma.jsonl`
