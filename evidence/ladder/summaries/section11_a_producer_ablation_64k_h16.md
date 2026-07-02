@@ -134,17 +134,16 @@ The TileOps blocksolve producer plus the same replay family is faster again:
 0.815029 ms / 0.695237 ms = 1.17x
 ```
 
-The implied TileOps producer-side cost in this harness is:
-
-```text
-0.695237 ms - 0.542905 ms = 0.152332 ms
-```
-
-This is lower than the TL0.1.8-lowering prepare row:
+The paired producer-only component rows show the prepare-side difference
+without mixing in replay timing boundaries:
 
 ```text
 0.470905 ms / 0.238202 ms = 1.98x
 ```
+
+Do not derive a producer cost by subtracting the replay-only diagnostic from
+the full row. The replay-only and full-row measurements are useful together,
+but their event boundaries are not a strict additive decomposition.
 
 ## Supported Narrative
 

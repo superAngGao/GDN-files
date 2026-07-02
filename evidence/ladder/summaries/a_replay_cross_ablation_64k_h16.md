@@ -141,9 +141,11 @@ current-TL KKT A: 562 nonfinite values, range hits +/-65504
 TL0.1.8 exported A: 0 nonfinite values, range [-0.269, 1.0]
 ```
 
-This is why the valid FlashQLA-style row is still a component-sum estimate:
-the only correct public FlashQLA producer evidence is currently the TL0.1.8
-component plus its exported A/g artifact.
+This is why this older replay diagnostic could only use a component-sum
+estimate for the FlashQLA-style prepare path. The current headline Section 11
+row is no longer that estimate: it is the measured TL0.1.8-lowering KKT
+external-launcher path plus TileOps replay, archived in
+`evidence/ladder/summaries/section11_a_producer_ablation_64k_h16.md`.
 
 ## What This Does Not Prove
 
