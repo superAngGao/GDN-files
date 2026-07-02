@@ -397,6 +397,71 @@ TileOps improved two implementation axes under that schedule family:
   2. the A producer via the blocked-inverse / Neumann-style path.
 ```
 
+#### SI.3.4.1 Prepare-A MAC Accounting
+
+The main article counts one multiply-add as one MAC and scopes the accounting
+to the prepare-A producer, not the entire GDN prefill operator. For the
+production `chunk64, DK=128` blocksolve producer, each chunk/head is split into
+four 16-token blocks.
+
+The Gram stage computes the ten lower-block products:
+
+```text
+G00
+G10, G11
+G20, G21, G22
+G30, G31, G32, G33
+```
+
+Each product is a `16 x 128` by `128 x 16` multiply:
+
+```text
+one Gram block = 16 * 16 * 128 = 32,768 MACs
+ten blocks     = 10 * 32,768   = 327,680 MACs
+```
+
+For comparison, a full dense `64 x 64` Gram would be:
+
+```text
+64 * 64 * 128 = 524,288 MACs
+```
+
+The elementwise causal lower triangle with diagonal would be:
+
+```text
+(64 * 65 / 2) * 128 = 266,240 MACs
+```
+
+The blocked implementation intentionally sits between those two counts: it
+avoids the upper off-diagonal blocks, but computes dense `16 x 16` diagonal
+blocks to keep a regular GEMM shape.
+
+The block inverse/composition tail uses twenty-four `16 x 16 x 16` small GEMMs:
+
+```text
+diagonal local updates:        8 GEMMs
+off-diagonal block composition: 16 GEMMs
+one small GEMM = 16 * 16 * 16 = 4,096 MACs
+total tail     = 24 * 4,096   = 98,304 MACs
+```
+
+So the prepare-A producer performs:
+
+```text
+327,680 + 98,304 = 425,984 GEMM MACs per chunk/head
+```
+
+For the formal `B=1, T=65536, H=16, chunk64` evidence row:
+
+```text
+chunk/heads = (65536 / 64) * 16 = 16,384
+prepare-A GEMM MACs = 425,984 * 16,384 = 6,979,321,856
+```
+
+This excludes scalar beta/gate exponent and scaling work, stores, and the
+downstream replay/output kernel. Under the usual FLOP convention where one
+multiply-add is counted as two FLOPs, double the MAC counts.
+
 #### SI.3.5 What Still Needs Refresh Before Publication
 
 The formal `64K/H16` package and the five-shape production-surface sweep replace

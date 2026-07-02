@@ -962,8 +962,25 @@ This recurrence is the algorithmic shape behind the blocksolve producer. The
 implementation computes the ten lower Gram blocks
 `G00, G10, G11, ..., G33`, applies the beta/gate scalings, forms local
 diagonal inverses with a Neumann-style update, and composes the off-diagonal
-blocks with a fixed sequence of small GEMMs in shared memory. The accepted
-variant should therefore be described as a **blocked-inverse /
+blocks with a fixed sequence of small GEMMs in shared memory.
+
+The multiply-add accounting makes the tradeoff concrete. Counting one
+multiply-add as one MAC, a dense `64 x 64` Gram over `DK=128` would cost
+`64 * 64 * 128 = 524,288` MACs per chunk/head. The true causal lower triangle
+with diagonal has `64 * 65 / 2` token pairs, or `266,240` MACs. The production
+blocked shape computes ten dense `16 x 16` Gram blocks, so the Gram stage costs
+`10 * 16 * 16 * 128 = 327,680` MACs: more than the exact elementwise lower
+triangle because the four diagonal blocks keep a dense GEMM shape, but much
+less than the full dense grid. The block inverse/composition then adds
+twenty-four `16 x 16 x 16` small GEMMs, or another `98,304` MACs. So the
+prepare-A producer performs about `425,984` GEMM MACs per chunk/head before
+scalar beta/gate work. For the formal `B=1, T=64K, H=16, chunk64` row, that is
+`16,384` chunk/heads, or about `6.98B` prepare-A GEMM MACs. The win is therefore
+not a magical disappearance of arithmetic; it is turning the necessary causal
+correction into a lower-blocked, tensor-core-friendly GEMM schedule with a
+small fixed block-composition tail.
+
+The accepted variant should therefore be described as a **blocked-inverse /
 Neumann-style A producer**, not as a proof that the materialized `A` is
 identical to the generic exact/KKT-style producer. Direct intermediate-`A`
 comparison details stay in SI; full-op correctness is what is validated.
