@@ -1102,12 +1102,12 @@ evidence note as diagnostics rather than headline A-producer claims. The caveat
 is that this row is an external TL0.1.8-lowering harness row, not a native
 current-TL KKT port.
 
-The V5/V6 adapter rows should be kept as supporting bridge evidence only. V5
-and V6 use the same CP downstream ABI and materialized A handoff shape/layout,
-but they do not claim numerically equivalent intermediate A tensors. The
-supported claim is therefore full-op correctness and compatibility under the
-same downstream contract, not equality of the intermediate A tensors and not a
-pure single-variable proof of the A mathematics.
+The V5/V6 adapter rows are supporting bridge evidence only. V5 and V6 use the
+same CP downstream ABI and materialized A handoff shape/layout, but they do not
+claim numerically equivalent intermediate A tensors. The supported claim is
+therefore full-op correctness and compatibility under the same downstream
+contract, not equality of the intermediate A tensors and not a pure
+single-variable proof of the A mathematics.
 
 Short version of why that is acceptable: the publication claim is not
 "intermediate A tensors are identical." The claim is that each producer can feed
@@ -1257,18 +1257,18 @@ Detailed evidence lives in `tutorial_v3_si.md`, including:
 
 The claims above are bounded by these constraints:
 
-1. Keep the Neumann/blocksolve formulas tied to the implementation caveat:
-   TileOps uses a blocked-inverse / Neumann-style producer, and the materialized
-   `A` is not claimed to equal the generic exact/KKT-style producer.
-2. Refresh Tier-1 correctness and benchmark tables if the PR head, TileLang
-   wheel, docker/runtime, dispatch heuristic, benchmark timer, GPU, or
+1. Neumann/blocksolve formulas are tied to the implementation caveat: TileOps
+   uses a blocked-inverse / Neumann-style producer, and the materialized `A` is
+   not claimed to equal the generic exact/KKT-style producer.
+2. Tier-1 correctness and benchmark tables need refresh when the PR head,
+   TileLang wheel, docker/runtime, dispatch heuristic, benchmark timer, GPU, or
    FlashQLA/FLA environment changes.
-3. Keep the TL0.1.8-lowering FlashQLA-style prepare-A row labeled as an
-   external-lowering harness measurement, not a native current-TL KKT port.
-4. Keep the CP-split non-originality statement.
-5. Keep the hierarchical-prefix negative result scoped to the tested
+3. The TL0.1.8-lowering FlashQLA-style prepare-A row is an external-lowering
+   harness measurement, not a native current-TL KKT port.
+4. The CP-split schedule remains credited to FlashQLA.
+5. The hierarchical-prefix negative result is scoped to the tested
    `DK=DV=128`, `chunk64` production path.
-6. Keep the TileOps-vs-FlashQLA public-environment caveat and avoid replay
-   algorithm attribution from full-op speedups alone.
-7. Say "externally verified FLA 0.5.1" only if the package identity has been
-   checked; otherwise keep the "recorded vendored FLA reference" caveat.
+6. TileOps-vs-FlashQLA numbers are public-environment comparisons; full-op
+   speedups alone do not imply replay algorithm attribution.
+7. "Externally verified FLA 0.5.1" requires package-identity verification;
+   otherwise the safe phrase is "recorded vendored FLA reference."
