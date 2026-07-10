@@ -88,6 +88,29 @@ prepare -> corrected h_start[1] -> segment1 short replay
 
 > segment 不是天然独立；它们因为 corrected initial state 正确，才可以分段 replay。
 
+这里的 overlap 发生在两个位置：
+
+1. **summary / correction 和 replay 的工作面被拆开。**  
+   每个 chunk/segment 的 summary 可以先并行准备；correction 只在 segment summary
+   上传播状态，而不是在所有 token/chunk 上做完整 replay。
+2. **不同 segment 的 local replay 可以同时在 GPU 上执行。**  
+   一旦 `h_start[segment]` 已经被校正出来，该 segment 内部只剩短 recurrence。
+   这些短 recurrence 属于不同 segment，可以映射到不同 CTA / work unit。
+
+所以 overlap 不是“同一个 segment 的 correction 和 replay 没有依赖”。  
+同一个 segment 必须先有正确 `h_start`，才能 replay。  
+overlap 指的是：全局长链被拆成 summary/correction + 多个短 replay 后，GPU
+可以让不同 segment 的准备、校正、短 replay 形成更大的并行工作面。
+
+```text
+time / work surface:
+
+summary:    [S0 summary] [S1 summary] [S2 summary] [S3 summary]   mostly parallel
+correction:       h_start0 -> h_start1 -> h_start2 -> h_start3    on summaries
+replay:       [seg0 replay] [seg1 replay] [seg2 replay] [seg3 replay]
+                short chain    short chain    short chain    short chain
+```
+
 ---
 
 ## 4. CP split 伪代码
