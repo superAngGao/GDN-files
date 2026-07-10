@@ -1,93 +1,76 @@
-# CP Split 和 Neumann Prepare：内部讲解提纲
+# CP Split 与 Neumann Prepare：算法和 GPU 实现讲解
 
-目标：给同事讲清楚 Gated DeltaNet prefill 中两个关键 search-space expansion：
+目标：给同事讲清楚 Gated DeltaNet prefill 中两个核心实现问题：
 
-1. **CP split**：为什么它解决的是 replay 依赖链形状问题。
-2. **Blocked-inverse / Neumann-style prepare**：为什么它解决的是 prepare-A producer 的并行形状问题。
+1. **CP split** 如何把长 replay 依赖拆成 corrected segment starts + 短 segment replay。
+2. **Blocked-inverse / Neumann-style prepare** 如何把 chunk 内因果修正变成更适合 GPU 的 block/GEMM 形状。
 
 建议时长：25-35 分钟。  
-建议定位：不是 benchmark review，而是机制讲解。数字只做锚点。
+建议定位：讲算法和 GPU 实现，避免展开项目叙事和 benchmark 证据。
 
 ---
 
-## 0. 一句话主线
+## 0. 总览
 
-GDN prefill 的困难不是“算一个 GEMM”，而是：
+Gated DeltaNet prefill 的核心约束：
 
-> 我们想并行处理很多 token，但输出和 final_state 必须等价于 token-by-token decode。
+> prefill 要并行处理长序列，但 `o` 和 `final_state` 必须等价于 token-by-token decode。
 
-这带来两条长依赖：
+这会产生两个实现问题：
 
-- replay/output 的跨 chunk 状态依赖；
-- chunk 内 prepare-A 的因果修正依赖。
-
-CP split 改 replay 依赖链。  
-Neumann / blocksolve 改 prepare-A 的计算形状。
+| 层级 | 问题 | 解决方向 |
+| --- | --- | --- |
+| 跨 chunk / segment | replay 是长状态依赖链 | CP split |
+| chunk 内 | prepare-A 是因果三角修正 | blocked-inverse / Neumann-style prepare |
 
 ---
 
-## 1. Slide: GDN prefill 为什么难
+## 1. GDN prefill 的状态依赖
 
-### 图
+### 直觉图
 
 ```text
-decode view:
+decode:
 
 h0 -> token0 -> token1 -> token2 -> ... -> tokenT
-
-prefill wants:
-
-many tokens / chunks in parallel
-but same o and same final_state
 ```
 
-### 讲法
+每一步都依赖前一步状态：
 
-GDN 有 recurrent memory。每个 token 会读旧状态、写 residual，再影响后面的 token。
+```text
+read old state
+compute residual write
+update state
+produce output
+```
 
-所以 prefill 不能只把所有 token 当成普通 attention 矩阵乘。它必须保留 causal state 语义。
-
-我们优化的核心不是“消灭因果性”，而是改变因果性在哪个阶段、以什么形状被计算。
+prefill 的目标不是改语义，而是把等价计算换成更并行的形状。
 
 ---
 
-## 2. Slide: local AKO 的墙
+## 2. 为什么直接 replay 会慢
 
-### 图
+把长序列切成 chunk 后，最朴素的 replay 仍然是一条长链：
 
 ```text
-local optimization:
-
-scale placement
-store path
-small fusion
-
-helps local cost
-but replay chain is still:
-
 h0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 ```
 
-### 讲法
+每个 chunk 的 initial state 来自前一个 chunk 的 final state。  
+这会限制 GPU 并行度：
 
-Agent 很擅长在固定 contract 下做局部搜索：
-
-- scale 放在 key 还是 value 路径；
-- accumulator 怎么写 shared/global；
-- 哪些中间结果可以少 materialize。
-
-这些是有效优化，但它们不改变 replay 的长依赖链。  
-这就是 local wall。
-
-### 关键句
-
-> less materialization 不等于 shorter recurrence。
+- chunk 间不能自然并行；
+- replay kernel 即使融合，也仍然受长依赖链限制；
+- 减少 store 不等于缩短 recurrence。
 
 ---
 
-## 3. Slide: CP split 的核心想法
+## 3. CP split 的核心思想
 
-### 图
+CP split 的做法：
+
+1. 先用 preprocess/correction 算出每个 segment 的正确起始状态；
+2. 再让每个 segment 从自己的 corrected start state 开始做短 replay。
 
 ```text
 without CP split:
@@ -101,100 +84,157 @@ prepare -> corrected h_start[1] -> segment1 short replay
           corrected h_start[2] -> segment2 short replay
 ```
 
-### 讲法
+关键点：
 
-CP split 的关键不是“每个 segment 天然独立”。  
-它们不天然独立。
-
-关键是先计算每个 segment 应该从什么状态开始：
-
-```python
-h_start = correct_segment_starts(segment_summaries, h0)
-```
-
-一旦 `h_start[segment]` 正确，每个 segment 内部只需要跑短链。
-
-### 关键句
-
-> CP split does not remove causality. It moves part of causality into segment-start correction.
+> segment 不是天然独立；它们因为 corrected initial state 正确，才可以分段 replay。
 
 ---
 
-## 4. Slide: CP split 伪代码
+## 4. CP split 伪代码
 
-### 伪代码
+### 朴素 serial replay
 
 ```python
-# serial replay: one long dependency chain
 h = h0
 for chunk in chunks:
     o[chunk], h = replay_output(chunk, h)
+```
 
-# CP split: compute valid segment starts first
+### CP split replay
+
+```python
+# 1. 每个 segment/chunk 先给出 summary
+segment_summaries = summarize_segments(k, v, A, g, beta)
+
+# 2. correction step 计算每个 segment 的正确起始状态
 h_start = correct_segment_starts(segment_summaries, h0)
 
-for segment in segments:       # independent once h_start is known
+# 3. 每个 segment 内部做短 replay
+for segment in segments:          # segment 之间可以并行调度
     h = h_start[segment]
-    for chunk in segment:      # short local recurrence
+    for chunk in segment:         # segment 内仍然是短 recurrence
         o[chunk], h = fused_replay_output(chunk, h)
 ```
 
-### 讲法
-
-这改变了后端看到的工作形状：
-
-- 原来是一条很长的 serial replay；
-- 现在是 preprocess/correction 加多个短 replay；
-- fused replay/output kernel 可以在更短 segment 上工作。
-
-这就是 FlashQLA 对我们故事的关键贡献：提供了 CP-split replay schedule family。
+CP split 没有消除因果性。  
+它把长链的一部分变成了 segment-start correction。
 
 ---
 
-## 5. Slide: CP split 对 attribution 的含义
+## 5. GPU 实现中的 CP split pipeline
 
-### 表
+可以把实现拆成三类 kernel / 阶段：
 
-| 问题 | CP split 说明了什么 | CP split 没说明什么 |
-| --- | --- | --- |
-| replay wall | 长 replay 依赖需要 schedule-level 改写 | 不是普通 fusion 能解决 |
-| FlashQLA credit | schedule family 来自 FlashQLA | 不是说 TileOps 直接调用 FlashQLA |
-| TileOps contribution | 重建、适配、dispatch、验证 | 不是“发明 CP split” |
+```text
+input q/k/v/g/beta
+  |
+  v
+prepare-A / effective writes
+  |
+  v
+segment summary / prepare_h
+  |
+  v
+correct segment starts
+  |
+  v
+fused replay/output over short segments
+  |
+  v
+o, final_state
+```
 
-### 讲法
+每个阶段的 GPU 角色：
 
-我们对外必须区分：
-
-- schedule idea 的来源；
-- TileOps owned implementation；
-- final dispatch surface；
-- A producer 的进一步改进。
+| 阶段 | GPU 上的工作形状 |
+| --- | --- |
+| prepare-A | chunk-local triangular/block computation |
+| segment summary | per segment / per head summary state |
+| correct starts | prefix/correction over segment summaries |
+| fused replay/output | many shorter local replay chains |
 
 ---
 
-## 6. Slide: 为什么还需要 prepare-A
+## 6. corrected segment starts 为什么有效
 
-CP split 解决 replay 依赖链形状，但 replay 需要有效写入。
+假设有 4 个 segment：
 
-在 chunk 内，后面的 token 会受到前面 residual write 的影响。  
-所以 prepare 阶段需要构造一个 chunk-local correction：
+```text
+S0, S1, S2, S3
+```
+
+serial replay 需要：
+
+```text
+h_start[S0] = h0
+h_start[S1] = final_state(S0)
+h_start[S2] = final_state(S1)
+h_start[S3] = final_state(S2)
+```
+
+CP split 的目标是直接构造：
+
+```text
+h_start[S0], h_start[S1], h_start[S2], h_start[S3]
+```
+
+使得每个 segment 的 replay 结果等价于 serial replay。
+
+一旦 `h_start[Si]` 正确，segment 内部就只需要处理局部 chunk 链。
+
+---
+
+## 7. replay/output kernel 的并行收益
+
+没有 CP split：
+
+```text
+one very long chain
+low inter-segment parallelism
+large dependency depth
+```
+
+有 CP split：
+
+```text
+many shorter chains
+more CTAs / work units can be scheduled
+dependency depth per replay worker is smaller
+```
+
+GPU 上的收益来自：
+
+- 更短的 serial chain；
+- 更好的 occupancy / scheduling opportunity；
+- fused replay/output 可以专注局部 segment；
+- correction 的成本被 preprocess 阶段吸收。
+
+---
+
+## 8. 为什么 prepare-A 仍然关键
+
+CP split 解决 replay 的跨 segment 依赖，但 replay 需要有效写入。
+
+chunk 内 token 之间仍然有因果修正：
 
 ```text
 raw k/v/beta/g
   -> prepare-A
-  -> effective writes W, U
-  -> replay/output consumes W, U / A / g_cum
+  -> effective writes / correction matrix
+  -> replay/output
 ```
 
-如果 prepare-A producer 慢，整个 CP-split pipeline 仍然受限。
+如果 prepare-A producer 慢，整个 CP-split pipeline 仍然会受限。
+
+所以第二个问题是：
+
+> 如何把 chunk-local causal correction 做成 GPU 友好的 producer？
 
 ---
 
-## 7. Slide: chunk-local correction 的数学形状
+## 9. chunk-local correction 的逻辑形状
 
-### 逻辑视图
-
-在实现约定下，可以把 chunk 内相互作用写成一个严格下三角矩阵：
+在一个实现约定下，可以把 chunk 内交互看成严格下三角矩阵：
 
 ```math
 M_{i,j} =
@@ -204,89 +244,110 @@ M_{i,j} =
 \end{cases}
 ```
 
-有效写入形如：
+有效写入可以写成：
 
 ```math
 A = (I + M)^{-1}
 ```
 
-### 讲法
-
-这里不要把公式说成唯一 ABI。  
-实际 production CP path 会拆 factor：
+注意：这是逻辑视图。实际 CP path 的 ABI 会拆 factor：
 
 - materialized `A` 使用 `g_zero` convention；
 - `g_cum` 单独传给 replay；
-- correctness claim 是 full `o` / `final_state`，不是所有中间 A 完全相同。
+- correctness 看 full `o` / `final_state`。
 
 ---
 
-## 8. Slide: 为什么是 Neumann
+## 10. 为什么 Neumann 视角成立
 
-因为 `M` 是严格下三角矩阵。
-
-严格下三角矩阵是 nilpotent：
+`M` 是严格下三角矩阵，所以它是 nilpotent：
 
 ```math
 M^C = 0
 ```
 
-所以：
+因此：
 
 ```math
 (I + M)^{-1}
 = I - M + M^2 - M^3 + \cdots + (-1)^{C-1}M^{C-1}
 ```
 
-### 讲法
+这不是无限近似。  
+在 chunk 长度为 `C` 时，级数最多到 `M^{C-1}`，然后精确结束。
 
-这不是随机近似，也不是无限级数截断的猜测。  
-在固定 chunk 长度 `C` 内，它是有限的，因为严格下三角结构保证 `M^C = 0`。
+实现意义：
 
-### 关键句
-
-> Neumann 视角不是为了少算一个数学算子，而是暴露一个可 block、可并行的逆/更新结构。
+> 可以把 triangular inverse / correction 写成固定 block update 结构。
 
 ---
 
-## 9. Slide: blocksolve 的计算形状
+## 11. blocksolve 的分块结构
 
-### 图
+以 `chunk64` 为例，把 token 维切成 4 个 `16-token` block：
 
 ```text
-chunk64
-  -> 4 blocks of 16 tokens
+chunk64 -> [block0, block1, block2, block3]
+```
 
-lower block structure:
+lower block matrix：
 
+```text
 [B0  0   0   0 ]
 [L10 B1  0   0 ]
 [L20 L21 B2  0 ]
 [L30 L31 L32 B3]
 ```
 
-### block recurrence
+对角 block：
 
 ```math
 A_{r,r} = B_r^{-1}
 ```
+
+非对角 block：
 
 ```math
 A_{r,s} =
 -B_r^{-1}\sum_{m=s}^{r-1} L_{r,m}A_{m,s}, \quad r > s
 ```
 
-### 讲法
-
-把 `64 x 64` 的 causal correction 拆成四个 `16 x 16` block。  
-对角 block 做 local inverse / Neumann-style update。  
-off-diagonal block 用固定的小 GEMM 组合出来。
+这就是 block inverse / block composition 的固定形状。
 
 ---
 
-## 10. Slide: 计算量对比，不是“少算一切”
+## 12. GPU 上 blocksolve 怎么跑
 
-### 数字
+核心工作拆成两部分：
+
+1. 计算 lower Gram blocks；
+2. 组合 diagonal inverse 和 off-diagonal blocks。
+
+```text
+G00 = k0 @ k0.T
+G10 = k1 @ k0.T
+G11 = k1 @ k1.T
+...
+G33 = k3 @ k3.T
+```
+
+然后：
+
+```text
+B0, B1, B2, B3 -> local inverse
+L10, L20, ...  -> off-diagonal composition
+```
+
+GPU 友好点：
+
+- 主要形状是 `16 x 16` dense block；
+- 可以用 regular GEMM-shaped computation；
+- off-diagonal composition 是固定小 GEMM 序列；
+- 比 token-by-token forward substitution 更适合并行后端。
+
+---
+
+## 13. MAC accounting：不是少算一切
 
 以 `chunk64, DK=128` 为例：
 
@@ -299,128 +360,147 @@ off-diagonal block 用固定的小 GEMM 组合出来。
 | TileOps block inverse/composition tail | `98,304` |
 | TileOps prepare-A GEMM-shaped work total | `425,984` |
 
-### 讲法
+解释：
 
-TileOps blocksolve 不一定减少总 MAC。  
-它比严格下三角 interaction 多做一些 dense block 内计算。
-
-优势在于：
-
-- 工作变成 regular GEMM-shaped blocks；
-- dependency shape 更适合 GPU backend；
-- 小 block composition 是固定结构，容易调度。
-
-### 关键句
-
-> 这里的收益是 scheduling/backend-shape win，不是 abstract FLOP reduction。
+- blocksolve 比严格下三角 interaction 做了更多 dense block 内计算；
+- 但它远少于 full dense grid；
+- 更重要的是，它把工作变成 regular block/GEMM shape。
 
 ---
 
-## 11. Slide: 和 FlashQLA-style forward solve 的关系
+## 14. 和 forward solve 的差异
 
-### 数字
-
-只比较 solve/combine tail：
+只看 solve/combine tail：
 
 | Producer tail | MACs per chunk/head |
 | --- | ---: |
 | FlashQLA-style forward solve/combine tail | `89,600` |
 | TileOps blocked-inverse / Neumann-style tail | `98,304` |
 
-### 讲法
+TileOps tail 算术量略大。  
+这符合直觉：形成 reusable blocked inverse / composition 需要额外组合。
 
-直觉上，TileOps tail 算术量略大，这不奇怪。
-
-它要形成可复用的 blocked inverse / composition。  
-代价是 tail MAC 稍多。  
-收益是并行形状和 backend friendliness。
-
----
-
-## 12. Slide: 三个 A/replay rows 怎么读
-
-### 表
-
-| Row | 含义 | 用途 |
-| --- | --- | --- |
-| Public FlashQLA full path | public FlashQLA TL0.1.8 full path | external context |
-| FlashQLA-style A on TileOps replay | TL0.1.8-lowered KKT A/g + TileOps replay | 控制 replay，观察 FlashQLA-style A |
-| TileOps blocked-inverse A on TileOps replay | TileOps Neumann/blocksolve A + 同一个 TileOps replay | 观察 A producer 改进 |
-
-### 数字
+但它的实现形状更 regular：
 
 ```text
-Public FlashQLA full path:                 1.306838 ms
-FlashQLA-style A on TileOps replay:        0.8245 ms
-TileOps blocked-inverse A on TileOps replay: 0.7474 ms
+fixed small GEMM sequence
+shared-memory block composition
+less forward-substitution-shaped dependency
 ```
 
-### 讲法
-
-不要把这三行读成同一个 causal ladder。  
-它们回答三个不同问题：
-
-- public FlashQLA 是外部 context；
-- middle row 说明 TileOps replay/output 已经很强；
-- last row 说明在同一个 TileOps replay family 下，TileOps A producer 继续改进。
-
 ---
 
-## 13. Slide: 最终一句话总结
+## 15. CP split + Neumann 的组合方式
 
-CP split 和 Neumann 分别解决不同层级的问题：
+整体数据流：
 
-| 问题 | 技术 | 改变了什么 |
+```text
+q/k/v/g/beta
+  |
+  | prepare-A producer
+  v
+A, g_cum, beta
+  |
+  | CP preprocess / corrected segment starts
+  v
+h_start[segment]
+  |
+  | fused replay/output over short segments
+  v
+o, final_state
+```
+
+两个技术分别管不同问题：
+
+| 技术 | 管的问题 | 输出给下一阶段 |
 | --- | --- | --- |
-| replay 长链 | CP split | 把长 replay 改成 corrected starts + 短 segment replay |
-| prepare-A 形状 | blocked-inverse / Neumann | 把 causal correction 改成 lower-blocked GEMM-shaped producer |
-
-最终贡献不是某个孤立 speedup，而是：
-
-> 一个可审计的 kernel optimization loop：operator contract 固定，search-space expansion 清楚，credit boundary 清楚，结果可通过 correctness / benchmark / attribution gates 检查。
+| Neumann/blocksolve prepare | chunk 内 causal correction | `A` / effective writes |
+| CP split | segment 间 replay dependency | corrected `h_start` |
+| fused replay/output | segment 内短链 replay | `o`, `final_state` |
 
 ---
 
-## 14. 可能被问的问题
+## 16. prepare-A 到 replay 的接口
+
+CP split replay 不需要知道 A 是怎么来的。它只需要看到满足 ABI 的输入：
+
+| 张量 / 元数据 | 来源 | replay 怎么用 |
+| --- | --- | --- |
+| `A` | prepare-A producer | chunk-local causal correction |
+| `g_cum` | chunk-local gate prefix | replay 中处理 gate/decay |
+| `beta` | 原始输入 | write strength / residual update |
+| `q/k/v` | 原始输入 | output read 和 state update |
+| `initial_state` / `h_start` | CP preprocess / correction | 每个 segment 的正确起始状态 |
+| `cp_seq_map`, `cu_seqlens` 等 metadata | CP preprocess | 指示 segment replay 的 token 范围和调度方式 |
+
+这就是为什么 prepare-A producer 可以替换：
+
+```text
+prepare-A producer
+  -> A, g_cum, beta, metadata
+  -> fused replay/output
+```
+
+只要接口语义一致，replay/output kernel 可以保持同一个调度族。
+
+---
+
+## 17. 最终总结
+
+一句话：
+
+> CP split 改 replay 的依赖形状；Neumann/blocksolve 改 prepare-A 的计算形状。
+
+更具体地说：
+
+| 问题 | 原始形状 | 改后形状 |
+| --- | --- | --- |
+| replay | 一条长 chunk chain | corrected starts + 多个短 segment replay |
+| prepare-A | chunk 内三角因果修正 | lower-blocked GEMM-shaped producer |
+
+GPU 实现收益来自：
+
+- dependency depth 变短；
+- work units 更容易分段调度；
+- prepare-A 变成 regular block/GEMM shape；
+- fused replay/output 只处理短 segment。
+
+---
+
+## 18. 常见问题
 
 ### Q1: CP split 是不是消除了因果性？
 
-不是。它把部分因果性挪到 segment-start correction。  
-segment 只有在 corrected initial state 正确时才可以并行/分段 replay。
+不是。它把跨 segment 的因果性挪到 corrected segment starts。
 
-### Q2: Neumann 是不是近似？
+### Q2: segment 为什么可以并行？
 
-在这里不是随机近似。  
-因为 chunk-local `M` 是严格下三角，`M^C=0`，所以 Neumann series 是有限的。
+因为 correction 已经算出了每个 segment 的正确初始状态。  
+没有这个 corrected state，segment 不独立。
 
-### Q3: 为什么算得更多还可能更快？
+### Q3: Neumann 是近似吗？
 
-GPU 上不仅看 MAC 数，还看 dependency、数据布局、kernel shape、shared memory、compiler/backend 能不能生成高效路径。  
-TileOps blocksolve 把 prepare-A 变成更 regular 的 small GEMM / block composition。
+这里不是随机近似。  
+chunk 内 `M` 严格下三角，所以 `M^C=0`，级数有限终止。
 
-### Q4: materialized A 和公式里的 A 是同一个吗？
+### Q4: blocksolve 为什么可能更快？
 
-不是无条件同一个。  
-公式是 operator-level / ABI-scoped 视图。  
-production CP path 中 materialized `A` 使用 `g_zero` convention，`g_cum` 单独给 replay。
+不是因为 abstract FLOP 更少，而是因为它把工作变成更适合 GPU 的 block/GEMM shape。
 
-### Q5: FlashQLA 和 TileOps 的 credit 怎么讲？
+### Q5: materialized A 和公式 A 完全相同吗？
 
-FlashQLA 提供 CP-split schedule family。  
-TileOps 做 owned implementation、A producer、dispatch、correctness、benchmark、evidence lane。
+不一定。公式是逻辑视图。  
+production CP path 中 `A` 使用 `g_zero` convention，`g_cum` 单独传给 replay。
 
 ---
 
-## 15. 建议白板顺序
+## 19. 白板讲解顺序
 
-如果只用白板讲，按这个顺序：
-
-1. 画 decode recurrent chain。
-2. 画 without CP split 的 chunk chain。
-3. 画 with CP split 的 corrected segment starts。
-4. 写 `M` 严格下三角。
+1. 画 serial replay 长链。
+2. 画 CP split 的 corrected segment starts。
+3. 画 pipeline：prepare-A -> correct starts -> fused replay/output。
+4. 写严格下三角 `M`。
 5. 写 `M^C=0` 和有限 Neumann。
 6. 画 `chunk64 -> 4 x 16` lower block matrix。
-7. 写三行 A/replay comparison。
-
-这样同事会先理解“为什么要改 search space”，再看数字。
+7. 写 MAC accounting：不是少算一切，而是 GPU shape 更好。
+8. 画 prepare-A 到 replay 的张量接口。
