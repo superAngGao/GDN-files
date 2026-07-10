@@ -6,6 +6,9 @@ as a replacement for the TileOps source tree.
 
 ## Recommended Reading Order
 
+0. `presentations/cp-split-neumann-zh.md`
+   - Chinese internal talk outline for explaining CP split and
+     blocked-inverse / Neumann prepare before publication.
 1. `algorithm/gated_deltanet_algorithm_talk_zh.md`
    - Chinese algorithm note for Gated DeltaNet intuition, recurrence, erase
      mechanism, gates, and chunkwise computation.
@@ -30,6 +33,8 @@ as a replacement for the TileOps source tree.
   - Review requests, handoff notes, and external-review material.
 - `blog/data/`
   - Historical log material.
+- `presentations/`
+  - Rendered talk outlines and internal presentation material.
 - `evidence/ladder/docs/`
   - Ladder harness README and variant inventory.
 - `evidence/ladder/summaries/`
