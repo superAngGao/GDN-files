@@ -67,7 +67,56 @@ h0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 
 ## 3. CP split 的核心思想
 
-CP split 的做法：
+CP split 的核心不是“把 segment 当成独立序列”。  
+真正的做法是：先把每个 segment 压缩成一个 **affine transition**，再用这些
+transition 算出每个 segment 的正确起始 state。
+
+对一个 segment，可以把它对输入 state 的作用写成：
+
+```text
+H_out = H_local + M @ H_in
+```
+
+其中：
+
+- `H_in`：segment 的起始 recurrent state；
+- `H_local`：假设 `H_in = 0` 时，本 segment 自己写出来的 state；
+- `M`：本 segment 对输入 state 的传播、衰减和修正；
+- `H_out`：segment 结束后的 state。
+
+所以每个 segment 先生成一个 summary：
+
+```text
+summary[s] = (H_local[s], M[s])
+```
+
+两者依赖不同：
+
+| summary | 含义 | 主要依赖 |
+|---|---|---|
+| `H_local` | 本 segment 自己写入的新 state | `K, V, A, g, beta` |
+| `M` | 本 segment 如何传播输入 state | `K, A, g, beta` |
+
+`H_local` 需要 `V`，因为它描述“写入了什么内容”。  
+`M` 通常不需要 `V`，因为它描述“旧 state 如何被本 segment 传播到段尾”。
+
+然后 corrected start states 由这些 affine summary 前缀传播得到：
+
+```text
+h_start[0] = h0
+h_start[1] = H_local[0] + M[0] @ h_start[0]
+h_start[2] = H_local[1] + M[1] @ h_start[1]
+h_start[3] = H_local[2] + M[2] @ h_start[2]
+...
+```
+
+也就是：
+
+```text
+h_start[s + 1] = H_local[s] + M[s] @ h_start[s]
+```
+
+拿到这些 corrected starts 后，才进入分段 replay：
 
 1. 先用 preprocess/correction 算出每个 segment 的正确起始状态；
 2. 再让每个 segment 从自己的 corrected start state 开始做短 replay。
@@ -88,10 +137,44 @@ prepare -> corrected h_start[1] -> segment1 short replay
 
 > segment 不是天然独立；它们因为 corrected initial state 正确，才可以分段 replay。
 
-这里的 overlap 发生在两个位置：
+### 并行发生在哪里
+
+`H_local` 和 `M` 的计算，在 **同一个 segment 内** 仍然要按 chunk 顺序累计：
+
+```text
+segment summary:
+chunk0 transition -> chunk1 transition -> ... -> chunk31 transition
+```
+
+但不同 segment 可以并行做自己的 summary：
+
+```text
+segment0 summary: chunk0  -> ... -> chunk31
+segment1 summary: chunk32 -> ... -> chunk63
+segment2 summary: chunk64 -> ... -> chunk95
+...
+```
+
+对 64K/H16/chunk64 的主例子：
+
+```text
+1024 chunks
+32 CP segments
+32 chunks per segment
+```
+
+所以 CP split 把一条 1024-chunk 的长 replay 链，改成：
+
+```text
+32 个 segment summary 短链
++ 32 个 segment summary 上的 correction scan
++ 32 个 segment-local replay 短链
+```
+
+这里的 overlap / 并行发生在两个位置：
 
 1. **summary / correction 和 replay 的工作面被拆开。**  
-   每个 chunk/segment 的 summary 可以先并行准备；correction 只在 segment summary
+   每个 segment 的 summary 可以先并行准备；correction 只在 segment summary
    上传播状态，而不是在所有 token/chunk 上做完整 replay。
 2. **不同 segment 的 local replay 可以同时在 GPU 上执行。**  
    一旦 `h_start[segment]` 已经被校正出来，该 segment 内部只剩短 recurrence。
@@ -101,6 +184,26 @@ prepare -> corrected h_start[1] -> segment1 short replay
 同一个 segment 必须先有正确 `h_start`，才能 replay。  
 overlap 指的是：全局长链被拆成 summary/correction + 多个短 replay 后，GPU
 可以让不同 segment 的准备、校正、短 replay 形成更大的并行工作面。
+
+### 代价：有重复计算
+
+CP split 不是 work-efficient 的免费优化。它会多做一遍 summary work：
+
+```text
+summary pass:
+    计算 H_local / M，用来得到 corrected h_start
+
+replay/output pass:
+    从 corrected h_start 出发，再跑一遍 segment-local replay/output
+```
+
+也就是说，`K/V/A/g/beta` 相关的一部分 state-transition work 会重复。  
+它换来的收益是 critical path 变短、GPU 上同时可调度的 work surface 变大：
+
+```text
+work 变多一些
+critical path 从 1024 chunks 变成 32-chunk 短链 + 32-segment correction
+```
 
 ```text
 time / work surface:
