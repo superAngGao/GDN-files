@@ -216,38 +216,7 @@ replay:       [seg0 replay] [seg1 replay] [seg2 replay] [seg3 replay]
 
 ---
 
-## 4. CP split 伪代码
-
-### 朴素 serial replay
-
-```python
-h = h0
-for chunk in chunks:
-    o[chunk], h = replay_output(chunk, h)
-```
-
-### CP split replay
-
-```python
-# 1. 每个 segment/chunk 先给出 summary
-segment_summaries = summarize_segments(k, v, A, g, beta)
-
-# 2. correction step 计算每个 segment 的正确起始状态
-h_start = correct_segment_starts(segment_summaries, h0)
-
-# 3. 每个 segment 内部做短 replay
-for segment in segments:          # segment 之间可以并行调度
-    h = h_start[segment]
-    for chunk in segment:         # segment 内仍然是短 recurrence
-        o[chunk], h = fused_replay_output(chunk, h)
-```
-
-CP split 没有消除因果性。  
-它把长链的一部分变成了 segment-start correction。
-
----
-
-## 5. GPU 实现中的 CP split pipeline
+## 4. GPU 实现中的 CP split pipeline
 
 可以把实现拆成三类 kernel / 阶段：
 
@@ -281,7 +250,7 @@ o, final_state
 
 ---
 
-## 6. corrected segment starts 为什么有效
+## 5. corrected segment starts 为什么有效
 
 假设有 4 个 segment：
 
@@ -310,7 +279,7 @@ h_start[S0], h_start[S1], h_start[S2], h_start[S3]
 
 ---
 
-## 7. replay/output kernel 的并行收益
+## 6. replay/output kernel 的并行收益
 
 没有 CP split：
 
@@ -337,7 +306,7 @@ GPU 上的收益来自：
 
 ---
 
-## 8. 为什么 prepare-A 仍然关键
+## 7. 为什么 prepare-A 仍然关键
 
 CP split 解决 replay 的跨 segment 依赖，但 replay 需要有效写入。
 
@@ -358,7 +327,7 @@ raw k/v/beta/g
 
 ---
 
-## 9. chunk-local correction 的逻辑形状
+## 8. chunk-local correction 的逻辑形状
 
 在一个实现约定下，可以把 chunk 内交互看成严格下三角矩阵：
 
@@ -384,7 +353,7 @@ A = (I + M)^{-1}
 
 ---
 
-## 10. 为什么 Neumann 视角成立
+## 9. 为什么 Neumann 视角成立
 
 `M` 是严格下三角矩阵，所以它是 nilpotent：
 
@@ -408,7 +377,7 @@ M^C = 0
 
 ---
 
-## 11. blocksolve 的分块结构
+## 10. blocksolve 的分块结构
 
 以 `chunk64` 为例，把 token 维切成 4 个 `16-token` block：
 
@@ -442,7 +411,7 @@ A_{r,s} =
 
 ---
 
-## 12. GPU 上 blocksolve 怎么跑
+## 11. GPU 上 blocksolve 怎么跑
 
 核心工作拆成两部分：
 
@@ -473,7 +442,7 @@ GPU 友好点：
 
 ---
 
-## 13. MAC accounting：不是少算一切
+## 12. MAC accounting：不是少算一切
 
 以 `chunk64, DK=128` 为例：
 
@@ -494,7 +463,7 @@ GPU 友好点：
 
 ---
 
-## 14. 和 forward solve 的差异
+## 13. 和 forward solve 的差异
 
 只看 solve/combine tail：
 
@@ -516,7 +485,7 @@ less forward-substitution-shaped dependency
 
 ---
 
-## 15. CP split + Neumann 的组合方式
+## 14. CP split + Neumann 的组合方式
 
 整体数据流：
 
@@ -546,7 +515,7 @@ o, final_state
 
 ---
 
-## 16. prepare-A 到 replay 的接口
+## 15. prepare-A 到 replay 的接口
 
 CP split replay 不需要知道 A 是怎么来的。它只需要看到满足 ABI 的输入：
 
@@ -571,7 +540,7 @@ prepare-A producer
 
 ---
 
-## 17. 最终总结
+## 16. 最终总结
 
 一句话：
 
@@ -593,7 +562,7 @@ GPU 实现收益来自：
 
 ---
 
-## 18. 常见问题
+## 17. 常见问题
 
 ### Q1: CP split 是不是消除了因果性？
 
@@ -620,7 +589,7 @@ production CP path 中 `A` 使用 `g_zero` convention，`g_cum` 单独传给 rep
 
 ---
 
-## 19. 白板讲解顺序
+## 18. 白板讲解顺序
 
 1. 画 serial replay 长链。
 2. 画 CP split 的 corrected segment starts。
