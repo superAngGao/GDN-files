@@ -50,18 +50,31 @@ h0 -> chunk0 -> chunk1 -> ... -> chunkN
 | replay/state update | `K, V, A, g, beta, h_start` | chunk states / final state | CP split |
 | output read | `Q, K, A, g` 和 replay states | `o` | fused replay/output |
 
-更直观地说：
+更具体地说，对一个 chunk 可以用下面的 schematic 表达：
 
 ```text
+inputs:
+    Q, K, V, g, beta, h_start
+
 prepare-A:
-    输入 K/g/beta，形成 chunk 内 correction matrix A
+    L[i,j] = beta[i] * gate(i,j) * <K[i], K[j]>,  i > j
+    A      = (I + L)^(-1)
 
-replay:
-    输入 K/V/A/g/beta 和 h_start，推进 state
+effective write / residual:
+    W = f_write(K, A, g, beta)
+    U = f_value(V, A, g, beta)
 
-output:
-    输入 Q 以及 replay states，生成 o
+replay/state update:
+    H[0]   = h_start
+    H[t+1] = update_state(H[t], K[t], W[t], U[t], g[t])
+
+output read:
+    o[t] = read_state(Q[t], H[t]) + local_residual(Q[t], K, U, A, g)
 ```
+
+这里的 `f_write`、`f_value`、`gate(i,j)` 是实现约定下的折叠写法。不同
+ABI 可以把 beta / gate factor 放在 `A` 或 replay 中不同位置；本文只需要区分
+prepare-A、replay/state update 和 output read 三类 workload。
 
 所以本文后面两个优化点分别对应：
 
