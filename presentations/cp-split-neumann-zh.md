@@ -48,7 +48,32 @@ prefill 的目标不是改语义，而是把等价计算换成更并行的形状
 
 ---
 
-## 2. 为什么直接 replay 会慢
+## 2. chunkwise 已经做了什么
+
+chunkwise prefill 先把 token 级 recurrence 压进 chunk 内部：
+
+```text
+token-level:
+h0 -> token0 -> token1 -> ... -> tokenT
+
+chunkwise:
+h0 -> chunk0 -> chunk1 -> ... -> chunkN
+```
+
+每个 chunk 内部用 chunk-local `A` / effective writes 表达 token 间的因果修正。  
+这一步已经把很多 token 内部细粒度依赖变成了 chunk-local matrix work。
+
+但 chunkwise 还没有解决跨 chunk 的 state 依赖：
+
+```text
+chunk i 的 h_start = chunk i-1 的 h_final
+```
+
+所以接下来的问题是 replay/output 的长链。
+
+---
+
+## 3. 为什么直接 replay 会慢
 
 把长序列切成 chunk 后，最朴素的 replay 仍然是一条长链：
 
@@ -65,7 +90,7 @@ h0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 
 ---
 
-## 3. CP split 的核心思想
+## 4. CP split 的核心思想
 
 CP split 的核心不是“把 segment 当成独立序列”。  
 真正的做法是：先把每个 segment 压缩成一个 **affine transition**，再用这些
@@ -216,7 +241,7 @@ replay:       [seg0 replay] [seg1 replay] [seg2 replay] [seg3 replay]
 
 ---
 
-## 4. GPU 实现中的 CP split pipeline
+## 5. GPU 实现中的 CP split pipeline
 
 可以把实现拆成三类 kernel / 阶段：
 
@@ -250,7 +275,7 @@ o, final_state
 
 ---
 
-## 5. corrected segment starts 为什么有效
+## 6. corrected segment starts 为什么有效
 
 假设有 4 个 segment：
 
@@ -279,7 +304,7 @@ h_start[S0], h_start[S1], h_start[S2], h_start[S3]
 
 ---
 
-## 6. replay/output kernel 的并行收益
+## 7. replay/output kernel 的并行收益
 
 没有 CP split：
 
@@ -306,7 +331,7 @@ GPU 上的收益来自：
 
 ---
 
-## 7. 为什么 prepare-A 仍然关键
+## 8. 为什么 prepare-A 仍然关键
 
 CP split 解决 replay 的跨 segment 依赖，但 replay 需要有效写入。
 
@@ -327,7 +352,7 @@ raw k/v/beta/g
 
 ---
 
-## 8. chunk-local correction 的逻辑形状
+## 9. chunk-local correction 的逻辑形状
 
 在一个实现约定下，可以把 chunk 内交互看成严格下三角矩阵：
 
@@ -353,7 +378,7 @@ A = (I + M)^{-1}
 
 ---
 
-## 9. 为什么 Neumann 视角成立
+## 10. 为什么 Neumann 视角成立
 
 `M` 是严格下三角矩阵，所以它是 nilpotent：
 
@@ -377,7 +402,7 @@ M^C = 0
 
 ---
 
-## 10. blocksolve 的分块结构
+## 11. blocksolve 的分块结构
 
 以 `chunk64` 为例，把 token 维切成 4 个 `16-token` block：
 
@@ -411,7 +436,7 @@ A_{r,s} =
 
 ---
 
-## 11. GPU 上 blocksolve 怎么跑
+## 12. GPU 上 blocksolve 怎么跑
 
 核心工作拆成两部分：
 
@@ -442,7 +467,7 @@ GPU 友好点：
 
 ---
 
-## 12. MAC accounting：不是少算一切
+## 13. MAC accounting：不是少算一切
 
 以 `chunk64, DK=128` 为例：
 
@@ -463,7 +488,7 @@ GPU 友好点：
 
 ---
 
-## 13. 和 forward solve 的差异
+## 14. 和 forward solve 的差异
 
 只看 solve/combine tail：
 
@@ -485,7 +510,7 @@ less forward-substitution-shaped dependency
 
 ---
 
-## 14. CP split + Neumann 的组合方式
+## 15. CP split + Neumann 的组合方式
 
 整体数据流：
 
@@ -515,7 +540,7 @@ o, final_state
 
 ---
 
-## 15. prepare-A 到 replay 的接口
+## 16. prepare-A 到 replay 的接口
 
 CP split replay 不需要知道 A 是怎么来的。它只需要看到满足 ABI 的输入：
 
@@ -540,7 +565,7 @@ prepare-A producer
 
 ---
 
-## 16. 最终总结
+## 17. 最终总结
 
 一句话：
 
@@ -562,7 +587,7 @@ GPU 实现收益来自：
 
 ---
 
-## 17. 常见问题
+## 18. 常见问题
 
 ### Q1: CP split 是不是消除了因果性？
 
@@ -589,7 +614,7 @@ production CP path 中 `A` 使用 `g_zero` convention，`g_cum` 单独传给 rep
 
 ---
 
-## 18. 白板讲解顺序
+## 19. 白板讲解顺序
 
 1. 画 serial replay 长链。
 2. 画 CP split 的 corrected segment starts。
