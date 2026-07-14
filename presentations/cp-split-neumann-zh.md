@@ -349,20 +349,44 @@ row0 -> row1 -> row2 -> ... -> row63
 
 ## 8. Neumann 视角
 
-因为 `M` 是 strictly lower triangular，它是 nilpotent：
+这里能用 Neumann 视角，根本原因是 `M` 是 strictly lower triangular。
+严格下三角矩阵的对角线全是 0：
+
+```text
+diag(M) = 0
+```
+
+三角矩阵的特征值就是对角线元素，所以 `M` 的所有特征值都是 0：
+
+```text
+eig(M) = {0, 0, ..., 0}
+```
+
+在有限维矩阵里，strictly lower triangular 矩阵不仅谱半径为 0，而且是
+nilpotent。对 chunk 长度为 `C` 的矩阵，有：
 
 ```math
 M^C = 0
 ```
 
-其中 `C` 是 chunk 长度。因此：
+直观上，`M` 每乘一次，非零项都会向更低的 subdiagonal 移动；最多移动
+`C` 次以后，就没有位置可放了。
+
+因此：
 
 ```math
 (I + M)^{-1}
 = I - M + M^2 - M^3 + \cdots + (-1)^{C-1}M^{C-1}
 ```
 
-这不是无限近似。在有限 chunk 内，级数会精确截断。Neumann 视角的意义是：triangular inverse 可以被改写成固定的矩阵乘加结构。
+验证也很直接：
+
+```math
+(I + M)(I - M + M^2 - \cdots + (-1)^{C-1}M^{C-1}) = I + (-1)^{C-1}M^C = I
+```
+
+所以这不是无限近似。在有限 chunk 内，级数会精确截断。Neumann 视角的意义是：
+triangular inverse 可以被改写成固定的矩阵乘加结构。
 
 不过，直接对完整 `64 x 64` 矩阵做展开仍然不一定是最好的 GPU 形状。实现里进一步把 chunk64 分成 4 个 16-token block。
 
