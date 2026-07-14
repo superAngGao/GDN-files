@@ -61,20 +61,21 @@ prepare-A:
     A      = (I + L)^(-1)
 
 effective write / residual:
-    W = f_write(K, A, g, beta)
-    U = f_value(V, A, g, beta)
+    W = scale_g_beta(A @ K)      # [C, C] @ [C, DK] -> [C, DK]
+    U = scale_g_beta(A @ V)      # [C, C] @ [C, DV] -> [C, DV]
 
 replay/state update:
     H[0]   = h_start
-    H[t+1] = update_state(H[t], K[t], W[t], U[t], g[t])
+    H[t+1] = decay(g[t]) * H[t] + outer(W[t], U[t])
+           = decay(g[t]) * H[t] + W[t][:, None] @ U[t][None, :]
 
 output read:
-    o[t] = read_state(Q[t], H[t]) + local_residual(Q[t], K, U, A, g)
+    o[t] = Q[t] @ H[t] + local_residual(Q[t], K, U, A, g)
 ```
 
-这里的 `f_write`、`f_value`、`gate(i,j)` 是实现约定下的折叠写法。不同
-ABI 可以把 beta / gate factor 放在 `A` 或 replay 中不同位置；本文只需要区分
-prepare-A、replay/state update 和 output read 三类 workload。
+这里的 `scale_g_beta`、`decay(g)`、`gate(i,j)` 是实现约定下的折叠写法。不同
+ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；
+本文只需要看清三类 workload 的矩阵乘加形状。
 
 所以本文后面两个优化点分别对应：
 
