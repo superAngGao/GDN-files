@@ -100,7 +100,10 @@ h0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 
 ## 2. Segment 的 Affine Summary
 
-对一个 segment，可以把它对输入 state 的作用写成一个 affine transition：
+CP split 的出发点是：chunk / segment 对 recurrent state 的作用不是任意函数，
+而是可以写成 affine transition。因此多个 chunk / segment 的状态转移可以组合。
+
+对一个 chunk 或 segment，可以把它对输入 state 的作用写成：
 
 ```text
 H_out = H_local + M @ H_in
@@ -114,6 +117,34 @@ H_out = H_local + M @ H_in
 | `H_local` | 假设 `H_in = 0`，本 segment 自己写出的 state |
 | `M` | 本 segment 对输入 state 的传播、衰减和修正 |
 | `H_out` | segment 结束后的 state |
+
+两个相邻 transition 可以合成。假设：
+
+```text
+T0(H) = B0 + M0 @ H
+T1(H) = B1 + M1 @ H
+```
+
+那么：
+
+```text
+T1(T0(H))
+= B1 + M1 @ (B0 + M0 @ H)
+= (B1 + M1 @ B0) + (M1 @ M0) @ H
+```
+
+也就是说，合成以后仍然是同一种形式：
+
+```text
+T10(H) = B10 + M10 @ H
+
+B10 = B1 + M1 @ B0
+M10 = M1 @ M0
+```
+
+这个结合结构是缩短递推依赖链的核心。我们不必把所有 chunk 都完整 replay
+一遍才能知道后面 segment 的起点；可以先把一段压缩成 `(H_local, M)`，
+再在这些 summary 上做 correction / prefix。
 
 因此每个 segment 先生成一个 summary：
 
@@ -486,86 +517,4 @@ block matmul + add + scale/sign
 
 它不是通用 `inverse()`，也不是 64 行 forward substitution。它是固定 block DAG：先算对角块，再按 block subdiagonal 层级算非对角块。
 
----
-
-## 13. Kernel 中的使用方式
-
-prepare-A producer 的目标是输出 replay 所需的 `A`：
-
-```text
-1. 计算 block interaction: Dij / Lij
-2. 对角块：有限 Neumann
-3. 非对角块：block triangular inverse recurrence
-4. 写回 A[batch, token, head, chunk_col]
-```
-
-这一步主要改变的是计算形状：把 chunk 内 causal triangular inverse 从 forward-substitution-shaped dependency 改成固定大小的 block computation。它不声称数学上所有 FLOPs 都减少；核心收益是执行形状更规则，更适合 GPU 后端调度。
-
----
-
-## 14. CP Split 与 Neumann 的组合
-
-整体数据流可以概括为：
-
-```text
-q/k/v/g/beta
-  |
-  | prepare-A producer
-  v
-A
-  |
-  | CP preprocess: H_local / M -> corrected h_start
-  v
-corrected segment starts
-  |
-  | fused replay/output
-  v
-o, final_state
-```
-
-两者分工不同：
-
-| 技术 | 改的是什么 | 输出给后续 |
-|---|---|---|
-| Neumann/blocksolve prepare | chunk 内 causal correction | `A` / effective writes |
-| CP split | 跨 segment replay 依赖 | corrected `h_start` |
-| fused replay/output | 从 corrected starts 产生输出 | `o`, `final_state` |
-
-CP split 改 replay 的依赖形状；Neumann/blocksolve 改 prepare-A 的计算形状。它们共同目标是保持 GDN 语义不变，同时把计算改造成 GPU 更容易执行的形状。
-
----
-
-## 15. 总结
-
-CP split 的核心是：
-
-```text
-把跨 chunk replay 长链
-变成 segment summary + corrected starts + short replay
-```
-
-Neumann / blocksolve 的核心是：
-
-```text
-把 chunk 内 triangular inverse
-变成有限级数 + block lower-triangular inverse
-```
-
-最重要的取舍是：
-
-```text
-不一定减少所有 work
-但缩短 critical path
-并把计算变成更规则的 GPU-friendly shape
-```
-
-建议白板讲解顺序：
-
-1. 画 token recurrence。
-2. 画 chunkwise 后剩下的 chunk 链。
-3. 画 segment affine summary：`H_out = H_local + M @ H_in`。
-4. 画 corrected starts。
-5. 画 `A = (I + M)^-1`。
-6. 画 4x4 block lower triangular matrix。
-7. 展开 `X10 / X20 / X30`。
-8. 总结：CP split 改 replay，Neumann 改 prepare-A。
+最后需要讲清楚的核心是：CP split 利用 affine transition 的结合结构缩短 replay 依赖链；Neumann/blocksolve 利用严格下三角的有限级数和分块求逆，把 prepare-A 改写成 block matmul/add 结构。
