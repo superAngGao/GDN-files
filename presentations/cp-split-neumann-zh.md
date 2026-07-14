@@ -98,34 +98,7 @@ h0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 
 ---
 
-## 2. CP Split 的整体 Pipeline
-
-CP split 要解决的是跨 chunk / segment 的 replay 依赖。实现上可以把 prefill path 看成下面几个阶段：
-
-```text
-q/k/v/g/beta
-  |
-  v
-prepare-A / effective writes
-  |
-  v
-segment summary / prepare_h
-  |
-  v
-correct segment starts
-  |
-  v
-fused replay/output over short segments
-  |
-  v
-o, final_state
-```
-
-关键思想不是把 segment 直接当成独立序列，而是先为每个 segment 计算一个状态转移 summary，再用这些 summary 推出每个 segment 的正确起始 state。只有 corrected start 正确后，segment 内部 replay 才能独立执行。
-
----
-
-## 3. Segment 的 Affine Summary
+## 2. Segment 的 Affine Summary
 
 对一个 segment，可以把它对输入 state 的作用写成一个 affine transition：
 
@@ -171,6 +144,33 @@ segment1: chunk32 -> ... -> chunk63
 segment2: chunk64 -> ... -> chunk95
 ...
 ```
+
+---
+
+## 3. CP Split 的整体 Pipeline
+
+有了 segment affine summary 这个对象后，CP split 的实现流程就比较清楚了。prefill path 可以看成下面几个阶段：
+
+```text
+q/k/v/g/beta
+  |
+  v
+prepare-A / effective writes
+  |
+  v
+segment summary / prepare_h
+  |
+  v
+correct segment starts
+  |
+  v
+fused replay/output over short segments
+  |
+  v
+o, final_state
+```
+
+关键点仍然是：segment 不是直接独立执行，而是先生成 `(H_local, M)` summary，再 correction 出正确 `h_start`，最后才做 segment-local replay/output。
 
 ---
 
