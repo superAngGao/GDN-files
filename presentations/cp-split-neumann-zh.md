@@ -9,7 +9,7 @@
 
 ---
 
-## 1. 背景：GDN Prefill 的状态依赖
+## 1. 背景：Chunkwise GDN Prefill 分成哪些步骤
 
 Gated DeltaNet decode 的语义是一条状态链：
 
@@ -19,7 +19,7 @@ h0 -> token0 -> token1 -> token2 -> ... -> tokenT
 
 每一步都会读取旧状态、计算 residual write、更新 state，并产生当前 token 的输出。Prefill 的目标不是改变这个语义，而是在保持 `o` 和 `final_state` 等价于 token-by-token decode 的前提下，把计算改造成更适合 GPU 并行执行的形状。
 
-chunkwise prefill 已经先做了一层重写：它把 token 级 recurrence 压到 chunk 内部，用 chunk-local `A` 或 effective writes 表达 token 之间的因果修正。
+chunkwise prefill 先做了一层重写：它把 token 级 recurrence 压到 chunk 内部，用 chunk-local correction 表达 token 之间的因果关系。
 
 ```text
 token-level:
@@ -29,7 +29,46 @@ chunkwise:
 h0 -> chunk0 -> chunk1 -> ... -> chunkN
 ```
 
-这一步解决了 chunk 内大量细粒度 token 依赖的问题，但没有解决跨 chunk 的状态依赖：
+从实现上看，chunkwise GDN prefill 可以拆成三类工作：
+
+```text
+1. prepare-A / effective writes
+   处理 chunk 内 token-token causal correction
+
+2. replay / state update
+   从 chunk 的 h_start 出发，更新 recurrent state
+
+3. output read
+   用 q 读取 replay 得到的 state / residual contribution
+```
+
+这三类工作对应的主要输入不同：
+
+| 阶段 | 主要输入 | 主要输出 | 后面对应的问题 |
+|---|---|---|---|
+| prepare-A | `K, g, beta`，以及 chunk 内 interaction | chunk-local `A` / effective writes | Neumann / blocksolve |
+| replay/state update | `K, V, A, g, beta, h_start` | chunk states / final state | CP split |
+| output read | `Q, K, A, g` 和 replay states | `o` | fused replay/output |
+
+更直观地说：
+
+```text
+prepare-A:
+    输入 K/g/beta，形成 chunk 内 correction matrix A
+
+replay:
+    输入 K/V/A/g/beta 和 h_start，推进 state
+
+output:
+    输入 Q 以及 replay states，生成 o
+```
+
+所以本文后面两个优化点分别对应：
+
+- CP split：处理 replay 的跨 chunk / segment 状态依赖；
+- Neumann / blocksolve：处理 prepare-A 的 chunk 内三角求解。
+
+chunkwise 已经解决了 chunk 内大量细粒度 token 依赖，但没有解决跨 chunk 的状态依赖：
 
 ```text
 chunk i 的 h_start = chunk i-1 的 h_final
