@@ -65,13 +65,13 @@ effective write / residual:
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
-chunkwise 的加速来自三件事：
+chunkwise 的关键改写是：先把 token 级递推依赖局部化、矩阵化，变成 chunk-local triangular correction / solve。这个改写本身是前提，不是独立的加速来源；它让后续 workload 能落到 GPU 更擅长的形状上。
 
-| 来源 | 含义 |
+| 层次 | 含义 |
 |---|---|
-| 分块并行 | 不同 `(batch, head, chunk)` 可以并行处理 |
-| 三角结构矩阵化 | token 依赖不再表现为逐 token loop，而是表现为 chunk-local triangular solve |
-| GEMM-shaped work | `K K^T`、`A @ K`、`A @ V` 更接近 GPU 擅长的 tile / GEMM / Tensor Core 形状 |
+| 前提：三角依赖局部矩阵化 | token 依赖不再表现为整段逐 token loop，而是表现为 chunk-local triangular correction / solve |
+| 直接收益：分块并行 | 不同 `(batch, head, chunk)` 可以并行处理 |
+| 直接收益：GEMM-shaped work | `K K^T`、`A @ K`、`A @ V` 更接近 GPU 擅长的 tile / GEMM / Tensor Core 形状 |
 
 它的 trade-off 也在这里：
 
