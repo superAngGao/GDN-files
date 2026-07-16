@@ -79,7 +79,16 @@ flowchart TD
     Replay --> HEnd["H_end"]
 ```
 
-这里的 `advance H_start -> H_end` 指的是 chunk 内按 token 顺序做三类操作：用当前 state 读 `Q[t] @ H[t]`，用 chunk-local `A/K/U/g` 读 local residual，然后用 effective write 更新 `H[t+1] = decay(g[t]) * H[t] + W[t] U[t]^T`。图里把它合成一个 replay 盒子，是为了突出跨 chunk 的依赖边界。
+这里的 `advance H_start -> H_end` 指的是：先设 `H[0] = H_start`，然后用 prepare-A 得到的 effective writes `W/U` 在 chunk 内做一个短递推：
+
+```text
+for t in 0..C-1:
+    H[t+1] = decay(g[t]) * H[t] + W[t] U[t]^T
+
+H_end = H[C]
+```
+
+得到这些 chunk-local states 后，再用 `Q[t] @ H[t]` 加上 chunk-local residual 生成 `o[t]`。图里把这段合成一个 replay 盒子，是为了突出：一个 chunk 的 `H_end` 虽然可以由本 chunk 的 `H_start` 和 `W/U/g` 算出，但下一个 chunk 的 `H_start` 仍然依赖上一个 chunk 的 `H_end`。
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
