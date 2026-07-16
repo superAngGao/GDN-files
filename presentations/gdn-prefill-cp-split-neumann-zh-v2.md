@@ -1,32 +1,29 @@
 # GDN Prefill 的 Chunkwise、Replay、CP Split 与 Neumann Prepare
 
-这份材料按五个概念顺序展开：
+这份材料按四个问题顺序展开：
 
-1. **GDN prefill** 要做什么。
-2. **Chunkwise** 在 chunk 内做什么。
-3. **Replay** 还剩下什么串行依赖。
-4. **CP split** 如何把长 replay 链改成 segment reduce + scan。
-5. **Blocked-inverse / Neumann prepare** 如何把 prepare-A 变成 block matmul/add。
+1. **GDN prefill / chunkwise** 在做什么。
+2. **Replay** 还剩下什么串行依赖。
+3. **CP split** 如何把长 replay 链改成 segment reduce + scan。
+4. **Blocked-inverse / Neumann prepare** 如何把 prepare-A 变成 block matmul/add。
 
 不讨论 local AKO、benchmark 叙事或 agent 过程。目标是先把专业术语对齐，再讲清楚我们改的是哪一段计算。
 
 ---
 
-## 0. 五句话总览
+## 0. 四句话总览
 
-1. **GDN prefill** 要做的是：给一整段 prompt 计算每个 token 的输出 `o_t`，同时得到 decode 继续使用的最终 recurrent state `H_T`。
+1. **GDN prefill / chunkwise** 要做的是：给一整段 prompt 计算每个 token 的输出 `o_t`，同时得到 decode 继续使用的最终 recurrent state `H_T`；chunkwise 把长序列切成固定长度 chunk，在 chunk 内构造局部三角 correction / solve 矩阵 `A`，再用它把 chunk 内写入修正成 effective write。
 
-2. **Chunkwise** 的基本做法是：把长序列切成固定长度 chunk，在每个 chunk 内先构造局部三角 correction / solve 矩阵 `A`，再用它把 chunk 内的写入修正成 effective write。
+2. **Replay** 做的是：给定一个 chunk 的起始 state `H_start`，按 chunk 内 token 顺序推进状态、读出输出，并产生这个 chunk 的结束 state。
 
-3. **Replay** 做的是：给定一个 chunk 的起始 state `H_start`，按 chunk 内 token 顺序推进状态、读出输出，并产生这个 chunk 的结束 state。
+3. **CP split** 做的是：不再把所有 chunk 串成一条从头到尾的长 replay 链，而是先为一组 chunk 计算“这个 segment 对输入 state 的仿射作用”和“segment 自己产生的新 state”，再用 correction / prefix 得到每个 segment 的正确 `H_start`，让多个 segment 的 replay 可以并行。
 
-4. **CP split** 做的是：不再把所有 chunk 串成一条从头到尾的长 replay 链，而是先为一组 chunk 计算“这个 segment 对输入 state 的仿射作用”和“segment 自己产生的新 state”，再用 correction / prefix 得到每个 segment 的正确 `H_start`，让多个 segment 的 replay 可以并行。
-
-5. **Blocked-inverse / Neumann prepare** 做的是：把 chunk 内原本偏串行的三角求解，改写成固定大小 block matrix multiply / add 的有限展开；它不改变 GDN 的数学目标，而是把 prepare-A 变成 GPU 更容易并行执行的形状。
+4. **Blocked-inverse / Neumann prepare** 做的是：把 chunk 内原本偏串行的三角求解，改写成固定大小 block matrix multiply / add 的有限展开；它不改变 GDN 的数学目标，而是把 prepare-A 变成 GPU 更容易并行执行的形状。
 
 ---
 
-## 1. GDN Prefill：整段 Prompt 的输出和最终状态
+## 1. GDN Prefill / Chunkwise：整段 Prompt 的目标和 Chunk 内三角问题
 
 GDN decode 的语义是一条状态链：
 
@@ -34,27 +31,14 @@ GDN decode 的语义是一条状态链：
 H0 -> token0 -> token1 -> token2 -> ... -> tokenT
 ```
 
-每一步都会读旧 state、计算 residual write、更新 state，并产生当前 token 的输出。prefill 的任务是一次性处理一整段 prompt：
+每一步都会读旧 state、计算 residual write、更新 state，并产生当前 token 的输出。prefill 的任务是一次性处理一整段 prompt，得到两类结果：
 
 ```text
 input:  Q, K, V, g, beta
 output: o[0:T], H_T
 ```
 
-这里有两个结果都必须对：
-
-| 结果 | 为什么重要 |
-|---|---|
-| `o[0:T]` | prompt 内每个 token 的输出 |
-| `H_T` | decode 下一步继续使用的 recurrent state |
-
-所以优化的目标不是改数学语义，而是在保持 `o` 和 `H_T` 等价于 token-by-token decode 的前提下，把计算改造成 GPU 更容易并行执行的形式。
-
----
-
-## 2. Chunkwise：把 Token 级递推压进 Chunk 内三角问题
-
-chunkwise 的基本做法是把长序列切成固定长度 chunk：
+优化的目标不是改数学语义，而是在保持 `o[0:T]` 和 `H_T` 等价于 token-by-token decode 的前提下，把计算改造成 GPU 更容易并行执行的形式。chunkwise 的第一步是把长序列切成固定长度 chunk：
 
 ```text
 token-level:
@@ -64,7 +48,7 @@ chunkwise:
 H0 -> chunk0 -> chunk1 -> ... -> chunkN
 ```
 
-在一个 chunk 内，token 之间仍然有因果关系，但这个关系被写成一个局部三角 correction / solve 矩阵。schematic 地看：
+在一个 chunk 内，token 之间仍然有因果关系，但这个关系被写成局部三角 correction / solve 矩阵 `A`。schematic 地看：
 
 ```text
 inputs:
@@ -101,7 +85,7 @@ chunkwise 的加速来自三件事：
 
 ---
 
-## 3. Replay：Chunkwise 之后还剩跨 Chunk 长链
+## 2. Replay：Chunkwise 之后还剩跨 Chunk 长链
 
 prepare-A 给出了 chunk 内 effective write。replay 做的是：给定一个 chunk 的起始 state `H_start`，按 chunk 内 token 顺序推进状态、读出输出，并产生这个 chunk 的结束 state。
 
@@ -133,7 +117,7 @@ H0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 
 ---
 
-## 4. CP Split：Segment Reduce + Segment Scan
+## 3. CP Split：Segment Reduce + Segment Scan
 
 CP split 不再把所有 chunk 串成一条从头到尾的 replay 链，而是利用一个事实：一个 chunk 或 segment 对 recurrent state 的作用可以写成 affine transition：
 
@@ -253,9 +237,9 @@ CP split 的 trade-off 是：
 
 ---
 
-## 5. Blocked-Inverse / Neumann Prepare：把 Chunk 内三角求解变成 Block Matmul/Add
+## 4. Blocked-Inverse / Neumann Prepare：把 Chunk 内三角求解变成 Block Matmul/Add
 
-### 5.1 为什么 Prepare-A 仍然关键
+### 4.1 为什么 Prepare-A 仍然关键
 
 CP split 改的是 replay 的跨 segment 依赖形状，但 replay 仍然需要 chunk 内有效写入：
 
@@ -288,7 +272,7 @@ A = (I + M)^{-1}
 
 ---
 
-### 5.2 串行 Forward Solve
+### 4.2 串行 Forward Solve
 
 从：
 
@@ -316,7 +300,7 @@ row0 -> row1 -> row2 -> ... -> row63
 
 ---
 
-### 5.3 Neumann 视角
+### 4.3 Neumann 视角
 
 这里能用 Neumann 视角，根本原因是 `M` 是 strictly lower triangular。
 严格下三角矩阵的对角线全是 0：
@@ -361,7 +345,7 @@ triangular inverse 可以被改写成固定的矩阵乘加结构。
 
 ---
 
-### 5.4 分块结构
+### 4.4 分块结构
 
 把 `chunk64` 切成 4 个 16-token block：
 
@@ -395,7 +379,7 @@ X =
 
 ---
 
-### 5.5 对角块求逆
+### 4.5 对角块求逆
 
 对角块满足：
 
@@ -422,7 +406,7 @@ D_i^{-1} = I - L_i + L_i^2 - \cdots + (-1)^{15}L_i^{15}
 
 ---
 
-### 5.6 非对角块求逆
+### 4.6 非对角块求逆
 
 非对角块由 `T X = I` 逐层推出。
 
@@ -481,7 +465,7 @@ level 3: X30
 
 ---
 
-### 5.7 分块求逆的通用公式
+### 4.7 分块求逆的通用公式
 
 对 block lower-triangular matrix：
 
