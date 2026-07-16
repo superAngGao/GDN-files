@@ -68,27 +68,15 @@ flowchart TD
     L["elementwise causal/gate/beta folding\nL = lower_tri(beta * gate * G)"]
     A["triangular correction / solve\nA = (I + L)^(-1)"]
     EW["effective writes\nW = scale(A @ K)\nU = scale(A @ V)"]
-
-    H0["initialize\nH[0] = H_start"]
-    Step["for each token t in chunk"]
-    Read["read current state\nstate_read[t] = Q[t] @ H[t]"]
-    Local["read local residual\nlocal[t] = residual(Q[t], K, U, A, g)"]
-    O["emit output\no[t] = state_read[t] + local[t]"]
-    Update["advance state\nH[t+1] = decay(g[t]) * H[t] + W[t] U[t]^T"]
-    HEnd["H_end = H[C]"]
+    Replay["chunk replay\nadvance H_start -> H_end"]
+    Output["output read\ngenerate o[chunk]"]
 
     Gram --> L
     L --> A
     A --> EW
-    EW --> Update
-    EW --> Local
-    H0 --> Step
-    Step --> Read
-    Step --> Update
-    Read --> O
-    Local --> O
-    Update --> Step
-    Step --> HEnd
+    EW --> Replay
+    Replay --> Output
+    Replay --> HEnd["H_end"]
 ```
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
