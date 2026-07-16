@@ -68,22 +68,24 @@ flowchart TD
     L["elementwise causal/gate/beta folding\nL = lower_tri(beta * gate * G)"]
     A["triangular correction / solve\nA = (I + L)^(-1)"]
     EW["effective writes\nW = scale(A @ K)\nU = scale(A @ V)"]
-    Replay["chunk replay\nadvance H_start -> H_end"]
+    Affine["assemble chunk transition\nB_chunk from W/U\nM_chunk from decay/correction"]
+    HEndFormula["apply to input state\nH_end = M_chunk @ H_start + B_chunk"]
 
     Gram --> L
     L --> A
     A --> EW
-    EW --> Replay
-    Replay --> HEnd["H_end"]
+    EW --> Affine
+    Affine --> HEndFormula
+    HEndFormula --> HEnd["H_end"]
 ```
 
-这里的 `advance H_start -> H_end` 不是要显式 materialize 每个 token 的中间 state。更准确地说，prepare-A 已经把 chunk 内 token 依赖折叠成 `A` 和 effective writes `W/U`；对 final state 来说，一个 chunk 对输入 state 的作用可以看成 affine transition：
+这里的 `W/U` 不是最终结果，而是用来组装这个 chunk 的 affine transition。对 final state 来说，一个 chunk 对输入 state 的作用可以写成：
 
 ```text
 H_end = M_chunk @ H_start + B_chunk
 ```
 
-其中 `M_chunk` 描述旧 state 在这个 chunk 内如何衰减/传播，`B_chunk` 描述本 chunk 自己产生的新 state。schematic 地看，`B_chunk` 来自 effective writes 的聚合矩阵乘加，例如 `W^T @ U`；具体 beta / gate factor 放在 `A`、`W/U` 还是 replay 中，由实现 ABI 决定。图里把这段合成一个 replay 盒子，是为了突出：一个 chunk 的 `H_end` 可以由本 chunk 的 `H_start` 和 `W/U/g` 算出，但下一个 chunk 的 `H_start` 仍然依赖上一个 chunk 的 `H_end`。
+其中 `M_chunk` 描述旧 state 在这个 chunk 内如何衰减/传播，`B_chunk` 描述本 chunk 自己产生的新 state。schematic 地看，`B_chunk` 来自 effective writes 的聚合矩阵乘加，例如 `W^T @ U`；具体 beta / gate factor 放在 `A`、`W/U` 还是 state replay 中，由实现 ABI 决定。图里把这段画成 affine transition，是为了突出：一个 chunk 的 `H_end` 可以由本 chunk 的 `H_start` 和 `W/U/g` 算出，但下一个 chunk 的 `H_start` 仍然依赖上一个 chunk 的 `H_end`。
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
