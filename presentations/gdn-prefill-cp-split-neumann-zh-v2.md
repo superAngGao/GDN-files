@@ -68,13 +68,14 @@ flowchart TD
     L["elementwise causal/gate/beta folding\nL = lower_tri(beta * gate * G)"]
     A["triangular correction / solve\nA = (I + L)^(-1)"]
     EW["effective writes\nW = scale(A @ K)\nU = scale(A @ V)"]
-    Affine["assemble chunk transition\nB_chunk from W/U\nM_chunk from decay/correction"]
+    Affine["assemble chunk transition\nB_chunk uses A,K,V,g,beta\nM_chunk uses A,K,g,beta"]
     HEndFormula["apply to input state\nH_end = M_chunk @ H_start + B_chunk"]
 
     Gram --> L
     L --> A
     A --> EW
     EW --> Affine
+    A --> Affine
     Affine --> HEndFormula
     HEndFormula --> HEnd["H_end"]
 ```
