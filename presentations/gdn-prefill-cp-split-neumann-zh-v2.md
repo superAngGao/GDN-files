@@ -80,16 +80,6 @@ flowchart TD
     HEndFormula --> HEnd["H_end"]
 ```
 
-这里的 `W/U` 不是最终结果，而是用来组装这个 chunk 的 affine transition。对 final state 来说，一个 chunk 对输入 state 的作用可以写成：
-
-```text
-H_end = M_chunk @ H_start + B_chunk
-```
-
-其中 `M_chunk` 描述旧 state 在这个 chunk 内如何衰减/传播，`B_chunk` 描述本 chunk 自己产生的新 state。schematic 地看，`B_chunk` 来自 effective writes 的聚合矩阵乘加，例如 `W^T @ U`；具体 beta / gate factor 放在 `A`、`W/U` 还是 state replay 中，由实现 ABI 决定。图里把这段画成 affine transition，是为了突出：一个 chunk 的 `H_end` 可以由本 chunk 的 `H_start` 和 `W/U/g` 算出，但下一个 chunk 的 `H_start` 仍然依赖上一个 chunk 的 `H_end`。
-
-这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
-
 chunkwise 的关键改写是：先把 token 级递推依赖局部化、矩阵化，变成 chunk-local triangular correction / solve。这个改写本身是前提，不是独立的加速来源；它让后续 workload 能落到 GPU 更擅长的形状上。
 
 | 层次 | 含义 |
