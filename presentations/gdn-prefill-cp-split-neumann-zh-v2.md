@@ -67,38 +67,17 @@ effective write / residual:
 
 ```mermaid
 flowchart TD
-    K["K: chunk keys"]
-    V["V: chunk values"]
-    Q["Q: chunk queries"]
-    G["g, beta: gates / write scales"]
-    H0["H_start"]
+    L["chunk-local interaction\nL: lower triangular"]
+    A["triangular correction / solve\nA = (I + L)^(-1)"]
+    EW["effective writes\nW = scale(A @ K)\nU = scale(A @ V)"]
+    Replay["chunk replay\nadvance H_start -> H_end"]
+    Output["output read\ngenerate o[chunk]"]
 
-    Gram["chunk interaction\nL[i,j] = beta[i] * gate(i,j) * dot(K[i], K[j])"]
-    Solve["triangular correction / solve\nA = (I + L)^(-1)"]
-    W["effective key write\nW = scale(A @ K)"]
-    U["effective value write\nU = scale(A @ V)"]
-    Replay["chunk replay / state update\nH[t+1] = decay * H[t] + W[t] U[t]^T"]
-    Out["output read\no[t] = Q[t] @ H[t] + local residual"]
-    H1["H_end"]
-    O["o[chunk]"]
-
-    K --> Gram
-    G --> Gram
-    Gram --> Solve
-    Solve --> W
-    Solve --> U
-    K --> W
-    V --> U
-    G --> W
-    G --> U
-    H0 --> Replay
-    W --> Replay
-    U --> Replay
-    G --> Replay
-    Q --> Out
-    Replay --> Out
-    Replay --> H1
-    Out --> O
+    L --> A
+    A --> EW
+    EW --> Replay
+    Replay --> Output
+    Replay --> HEnd["H_end"]
 ```
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
