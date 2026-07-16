@@ -12,7 +12,7 @@
 
 ## 0. 三句话总览
 
-1. **GDN prefill / chunkwise** 要做的是：给一整段 prompt 计算每个 token 的输出 `o_t`，同时得到 decode 继续使用的最终 recurrent state `H_T`；chunkwise 把长序列切成固定长度 chunk，在 chunk 内构造局部三角 correction / solve 矩阵 `A`，再用它把 chunk 内写入修正成 effective write。
+1. **GDN prefill / chunkwise** 在这里指 state-only prefill：给一整段 prompt 计算 decode 继续使用的最终 recurrent state `H_T`；chunkwise 把长序列切成固定长度 chunk，在 chunk 内构造局部三角 correction / solve 矩阵 `A`，再用它把 chunk 内写入修正成 effective write。
 
 2. **CP split** 要解决的是 chunkwise 之后仍然存在的跨 chunk replay 长链：它不再把所有 chunk 串成一条链，而是先为一组 chunk 计算“这个 segment 对输入 state 的仿射作用”和“segment 自己产生的新 state”，再用 correction / prefix 得到每个 segment 的正确 `H_start`，让多个 segment 的 replay 可以并行。
 
@@ -28,14 +28,14 @@ GDN decode 的语义是一条状态链：
 H0 -> token0 -> token1 -> token2 -> ... -> tokenT
 ```
 
-每一步都会读旧 state、计算 residual write、更新 state，并产生当前 token 的输出。prefill 的任务是一次性处理一整段 prompt，得到两类结果：
+每一步都会读旧 state、计算 residual write，并更新 state。这里讨论的是 state-only prefill：一次性处理一整段 prompt，得到 decode 下一步继续使用的最终 recurrent state：
 
 ```text
-input:  Q, K, V, g, beta
-output: o[0:T], H_T
+input:  K, V, g, beta
+result: H_T
 ```
 
-优化的目标不是改数学语义，而是在保持 `o[0:T]` 和 `H_T` 等价于 token-by-token decode 的前提下，把计算改造成 GPU 更容易并行执行的形式。chunkwise 的第一步是把长序列切成固定长度 chunk：
+优化的目标不是改数学语义，而是在保持 `H_T` 等价于 token-by-token decode 的前提下，把计算改造成 GPU 更容易并行执行的形式。chunkwise 的第一步是把长序列切成固定长度 chunk：
 
 ```text
 token-level:
@@ -49,7 +49,7 @@ H0 -> chunk0 -> chunk1 -> ... -> chunkN
 
 ```text
 inputs:
-    Q, K, V, g, beta, H_start
+    K, V, g, beta, H_start
 
 prepare-A:
     L[i,j] = beta[i] * gate(i,j) * <K[i], K[j]>,  i > j
@@ -69,26 +69,21 @@ flowchart TD
     A["triangular correction / solve\nA = (I + L)^(-1)"]
     EW["effective writes\nW = scale(A @ K)\nU = scale(A @ V)"]
     Replay["chunk replay\nadvance H_start -> H_end"]
-    Output["output read\ngenerate o[chunk]"]
 
     Gram --> L
     L --> A
     A --> EW
     EW --> Replay
-    Replay --> Output
     Replay --> HEnd["H_end"]
 ```
 
-这里的 `advance H_start -> H_end` 不是原始 token-by-token decode loop。更准确地说，prepare-A 已经把 chunk 内 token 依赖折叠成 `A` 和 effective writes `W/U`；replay 阶段用这些修正后的写入，把起始 state 推到结束 state。语义上可以理解为递推，但实现上按 tile/block 做矩阵乘加：
+这里的 `advance H_start -> H_end` 不是要显式 materialize 每个 token 的中间 state。更准确地说，prepare-A 已经把 chunk 内 token 依赖折叠成 `A` 和 effective writes `W/U`；对 final state 来说，一个 chunk 对输入 state 的作用可以看成 affine transition：
 
 ```text
-for local tile/block inside the chunk:
-    H_next = decay_block * H_in + W_block^T @ U_block
-
-H_end = last H_next
+H_end = M_chunk @ H_start + B_chunk
 ```
 
-其中 `W_block^T @ U_block` 是规则矩阵乘，block 内输出也用 `Q @ H_in` 和 local residual 的矩阵化读出生成。图里把这段合成一个 replay 盒子，是为了突出：一个 chunk 的 `H_end` 可以由本 chunk 的 `H_start` 和 `W/U/g` 算出，但下一个 chunk 的 `H_start` 仍然依赖上一个 chunk 的 `H_end`。
+其中 `M_chunk` 描述旧 state 在这个 chunk 内如何衰减/传播，`B_chunk` 描述本 chunk 自己产生的新 state。schematic 地看，`B_chunk` 来自 effective writes 的聚合矩阵乘加，例如 `W^T @ U`；具体 beta / gate factor 放在 `A`、`W/U` 还是 replay 中，由实现 ABI 决定。图里把这段合成一个 replay 盒子，是为了突出：一个 chunk 的 `H_end` 可以由本 chunk 的 `H_start` 和 `W/U/g` 算出，但下一个 chunk 的 `H_start` 仍然依赖上一个 chunk 的 `H_end`。
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
@@ -114,19 +109,14 @@ chunkwise 的关键改写是：先把 token 级递推依赖局部化、矩阵化
 
 ## 2. CP Split：Segment Reduce + Segment Scan
 
-chunkwise 把 chunk 内 token 依赖矩阵化了，但它没有消除 chunk 之间的状态依赖。prepare-A 给出 chunk 内 effective write 后，replay 仍然要从 `H_start` 出发推进状态、读出输出，并产生这个 chunk 的结束 state：
+chunkwise 把 chunk 内 token 依赖矩阵化了，但它没有消除 chunk 之间的状态依赖。prepare-A 给出 chunk 内 effective write 后，每个 chunk 仍然要从 `H_start` 推到 `H_end`：
 
 ```text
 replay/state update:
-    H[0]   = H_start
-    H[t+1] = decay(g[t]) * H[t] + outer(W[t], U[t])
-           = decay(g[t]) * H[t] + W[t][:, None] @ U[t][None, :]
-
-output read:
-    o[t] = Q[t] @ H[t] + local_residual(Q[t], K, U, A, g)
+    H_end = M_chunk @ H_start + B_chunk
 ```
 
-因为 `chunk i` 的 `H_start` 来自 `chunk i-1` 的 `H_final`，朴素 replay 仍然是一条很长的 chunk 链：
+因为 `chunk i` 的 `H_start` 来自 `chunk i-1` 的 `H_end`，朴素 replay 仍然是一条很长的 chunk 链：
 
 ```text
 H0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
@@ -260,7 +250,7 @@ CP split 改的是 replay 的跨 segment 依赖形状，但 replay 仍然需要 
 raw k/v/beta/g
   -> prepare-A
   -> effective writes / correction matrix
-  -> replay/output
+  -> state replay
 ```
 
 如果 prepare-A producer 慢，整个 CP-split pipeline 仍然会受限。因此第二个问题是：如何把 chunk-local causal correction 做成 GPU 友好的 producer。
