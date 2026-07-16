@@ -1,25 +1,60 @@
-# GDN Prefill 的 Chunkwise、CP Split 与 Neumann Prepare
+# GDN Prefill 的 Chunkwise、Replay、CP Split 与 Neumann Prepare
 
-这份材料只讲 Gated DeltaNet prefill 里的两个核心实现问题：
+这份材料按五个概念顺序展开：
 
-1. chunkwise replay 为什么仍然有跨 chunk 的长依赖，CP split 如何把它改造成 segment reduce + segment scan。
-2. chunk 内 prepare-A 为什么是三角求解问题，Neumann / blocksolve 如何把它改造成 block matmul/add。
+1. **GDN prefill** 要做什么。
+2. **Chunkwise** 在 chunk 内做什么。
+3. **Replay** 还剩下什么串行依赖。
+4. **CP split** 如何把长 replay 链改成 segment reduce + scan。
+5. **Blocked-inverse / Neumann prepare** 如何把 prepare-A 变成 block matmul/add。
 
-不讨论 local AKO、benchmark 叙事或 agent 过程。目标是让听众先对齐专业术语，再理解我们到底改了哪一段计算。
+不讨论 local AKO、benchmark 叙事或 agent 过程。目标是先把专业术语对齐，再讲清楚我们改的是哪一段计算。
 
 ---
 
-## 1. GDN Prefill 和 Chunkwise 在做什么
+## 0. 五句话总览
 
-GDN prefill 要做的是：给一整段 prompt 计算每个 token 的输出 `o_t`，同时得到 decode 继续使用的最终 recurrent state `H_T`。如果按 decode 语义直接做，它是一条 token-by-token 的状态链：
+1. **GDN prefill** 要做的是：给一整段 prompt 计算每个 token 的输出 `o_t`，同时得到 decode 继续使用的最终 recurrent state `H_T`。
+
+2. **Chunkwise** 的基本做法是：把长序列切成固定长度 chunk，在每个 chunk 内先构造局部三角 correction / solve 矩阵 `A`，再用它把 chunk 内的写入修正成 effective write。
+
+3. **Replay** 做的是：给定一个 chunk 的起始 state `H_start`，按 chunk 内 token 顺序推进状态、读出输出，并产生这个 chunk 的结束 state。
+
+4. **CP split** 做的是：不再把所有 chunk 串成一条从头到尾的长 replay 链，而是先为一组 chunk 计算“这个 segment 对输入 state 的仿射作用”和“segment 自己产生的新 state”，再用 correction / prefix 得到每个 segment 的正确 `H_start`，让多个 segment 的 replay 可以并行。
+
+5. **Blocked-inverse / Neumann prepare** 做的是：把 chunk 内原本偏串行的三角求解，改写成固定大小 block matrix multiply / add 的有限展开；它不改变 GDN 的数学目标，而是把 prepare-A 变成 GPU 更容易并行执行的形状。
+
+---
+
+## 1. GDN Prefill：整段 Prompt 的输出和最终状态
+
+GDN decode 的语义是一条状态链：
 
 ```text
 H0 -> token0 -> token1 -> token2 -> ... -> tokenT
 ```
 
-每一步都会读旧 state、计算 residual write、更新 state，并产生当前 token 的输出。Prefill 的目标不是改变这个语义，而是在保持 `o` 和 `final_state` 等价于 token-by-token decode 的前提下，把计算改造成 GPU 更容易并行执行的形状。
+每一步都会读旧 state、计算 residual write、更新 state，并产生当前 token 的输出。prefill 的任务是一次性处理一整段 prompt：
 
-chunkwise prefill 的第一步，是把长序列切成固定长度 chunk，把 token 级 recurrence 压到 chunk 内部，用 chunk-local correction / solve 矩阵表达 token 之间的因果关系：
+```text
+input:  Q, K, V, g, beta
+output: o[0:T], H_T
+```
+
+这里有两个结果都必须对：
+
+| 结果 | 为什么重要 |
+|---|---|
+| `o[0:T]` | prompt 内每个 token 的输出 |
+| `H_T` | decode 下一步继续使用的 recurrent state |
+
+所以优化的目标不是改数学语义，而是在保持 `o` 和 `H_T` 等价于 token-by-token decode 的前提下，把计算改造成 GPU 更容易并行执行的形式。
+
+---
+
+## 2. Chunkwise：把 Token 级递推压进 Chunk 内三角问题
+
+chunkwise 的基本做法是把长序列切成固定长度 chunk：
 
 ```text
 token-level:
@@ -29,7 +64,7 @@ chunkwise:
 H0 -> chunk0 -> chunk1 -> ... -> chunkN
 ```
 
-对一个 chunk，可以把主要工作拆成三类：
+在一个 chunk 内，token 之间仍然有因果关系，但这个关系被写成一个局部三角 correction / solve 矩阵。schematic 地看：
 
 ```text
 inputs:
@@ -42,32 +77,19 @@ prepare-A:
 effective write / residual:
     W = scale_g_beta(A @ K)      # [C, C] @ [C, DK] -> [C, DK]
     U = scale_g_beta(A @ V)      # [C, C] @ [C, DV] -> [C, DV]
-
-replay/state update:
-    H[0]   = H_start
-    H[t+1] = decay(g[t]) * H[t] + outer(W[t], U[t])
-           = decay(g[t]) * H[t] + W[t][:, None] @ U[t][None, :]
-
-output read:
-    o[t] = Q[t] @ H[t] + local_residual(Q[t], K, U, A, g)
 ```
 
-这里的 `scale_g_beta`、`decay(g)`、`gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这份材料只需要看清三类 workload 的矩阵乘加形状。
+这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
-所以 chunkwise 做了两件重要的事：
-
-1. 把 token 级细粒度 recurrence 变成 chunk 内三角矩阵问题。
-2. 把 chunk 内大量计算改造成 `K K^T`、triangular correction、`A @ K`、`A @ V` 这类矩阵乘加。
-
-这也是它的加速来源：
+chunkwise 的加速来自三件事：
 
 | 来源 | 含义 |
 |---|---|
 | 分块并行 | 不同 `(batch, head, chunk)` 可以并行处理 |
 | 三角结构矩阵化 | token 依赖不再表现为逐 token loop，而是表现为 chunk-local triangular solve |
-| GEMM-shaped work | `K K^T`、`A @ K`、`A @ V`、后面的 block inverse 都更接近 GPU 擅长的 tile / GEMM / Tensor Core 形状 |
+| GEMM-shaped work | `K K^T`、`A @ K`、`A @ V` 更接近 GPU 擅长的 tile / GEMM / Tensor Core 形状 |
 
-但 chunkwise 不是免费优化。它的 trade-off 是：
+它的 trade-off 也在这里：
 
 | 收益 | 代价 |
 |---|---|
@@ -79,7 +101,21 @@ output read:
 
 ---
 
-## 2. Chunkwise 之后还剩什么长依赖
+## 3. Replay：Chunkwise 之后还剩跨 Chunk 长链
+
+prepare-A 给出了 chunk 内 effective write。replay 做的是：给定一个 chunk 的起始 state `H_start`，按 chunk 内 token 顺序推进状态、读出输出，并产生这个 chunk 的结束 state。
+
+schematic 地看：
+
+```text
+replay/state update:
+    H[0]   = H_start
+    H[t+1] = decay(g[t]) * H[t] + outer(W[t], U[t])
+           = decay(g[t]) * H[t] + W[t][:, None] @ U[t][None, :]
+
+output read:
+    o[t] = Q[t] @ H[t] + local_residual(Q[t], K, U, A, g)
+```
 
 chunkwise 已经把 chunk 内 token 依赖矩阵化了，但它没有消除 chunk 之间的状态依赖：
 
@@ -93,13 +129,13 @@ chunk i 的 H_start = chunk i-1 的 H_final
 H0 -> chunk0 -> chunk1 -> chunk2 -> ... -> chunkN
 ```
 
-这就是 replay 的关键问题。即使 replay/output kernel 融合得很好，跨 chunk 的 `H_start -> H_final -> next H_start` 仍然限制 GPU 并行度。减少 store 不等于缩短 recurrence depth；要缩短依赖链，需要改变 chunk 之间的组织方式。
+这就是 CP split 要解决的问题。即使 replay/output kernel 融合得很好，跨 chunk 的 `H_start -> H_final -> next H_start` 仍然限制 GPU 并行度。减少 store 不等于缩短 recurrence depth；要缩短依赖链，需要改变 chunk 之间的组织方式。
 
 ---
 
-## 3. CP Split 的核心：仿射转移可以组合
+## 4. CP Split：Segment Reduce + Segment Scan
 
-CP split 的出发点是：一个 chunk 或 segment 对 recurrent state 的作用不是任意函数，而是可以写成 affine transition：
+CP split 不再把所有 chunk 串成一条从头到尾的 replay 链，而是利用一个事实：一个 chunk 或 segment 对 recurrent state 的作用可以写成 affine transition：
 
 ```text
 H_out = H_local + M @ H_in
@@ -107,23 +143,16 @@ H_out = H_local + M @ H_in
 
 其中：
 
-| 符号 | 含义 |
-|---|---|
-| `H_in` | segment 的起始 recurrent state |
-| `H_local` | 假设 `H_in = 0`，本 segment 自己写出的 state |
-| `M` | 本 segment 对输入 state 的传播、衰减和修正 |
-| `H_out` | segment 结束后的 state |
-
-`H_local` 和 `M` 的依赖不同：
-
-| summary | 表示什么 | 主要依赖 |
+| 符号 | 含义 | 主要依赖 |
 |---|---|---|
-| `H_local` | 本 segment 新写入的 state | `K, V, A, g, beta` |
-| `M` | 输入 state 如何传到段尾 | `K, A, g, beta` |
+| `H_in` | segment 的起始 recurrent state | 上游 segment |
+| `H_local` | 假设 `H_in = 0`，本 segment 自己写出的 state | `K, V, A, g, beta` |
+| `M` | 本 segment 对输入 state 的传播、衰减和修正 | `K, A, g, beta` |
+| `H_out` | segment 结束后的 state | `H_local, M, H_in` |
 
 `H_local` 需要 `V`，因为它描述“本 segment 写入了什么内容”。`M` 描述旧 state 如何被本 segment 传播到段尾，通常不需要 `V`，主要由 key、chunk-local correction、gate 和 beta 决定。
 
-这个 affine transition 有结合结构。假设：
+这个 affine transition 可以组合。假设：
 
 ```text
 T0(H) = B0 + M0 @ H
@@ -147,13 +176,7 @@ B10 = B1 + M1 @ B0
 M10 = M1 @ M0
 ```
 
-这个结合结构是缩短递推依赖链的核心。我们不必把所有 chunk 都完整 replay 一遍才能知道后面 segment 的起点；可以先把一段压缩成 `(H_local, M)`，再在这些 summary 上做 correction / prefix。
-
----
-
-## 4. CP Split = Segment Reduce + Segment Scan
-
-CP split 可以理解成两步：
+因此 CP split 可以看成两步：
 
 1. **segment-level reduce**：把一个 segment 内多个 chunk 的局部 transition 合成为一个 segment summary。
 2. **segment-level scan / correction**：对 segment summary 做 prefix composition，得到每个 segment 的正确 `H_start`。
@@ -185,14 +208,6 @@ H_start[3] = H_local[2] + M[2] @ H_start[2]
 ...
 ```
 
-也就是：
-
-```text
-H_start[s + 1] = H_local[s] + M[s] @ H_start[s]
-```
-
-这一步仍然有因果性，但它只在 segment summary 上传播，而不是在所有 token/chunk 的完整 replay 上传播。
-
 拿到 corrected starts 后，replay 可以分段执行：
 
 ```text
@@ -205,31 +220,6 @@ H_start[2] -> segment2 short replay
 所以 CP split 的语义边界是：
 
 > segment 不是天然独立；它们因为 corrected start 正确，才可以分段 replay。
-
-整体 pipeline 可以看成：
-
-```text
-Q/K/V/g/beta
-  |
-  v
-prepare-A / effective writes
-  |
-  v
-segment summary reduce: (H_local, M)
-  |
-  v
-segment scan / correction: H_start[s]
-  |
-  v
-fused replay/output over short segments
-  |
-  v
-o, final_state
-```
-
----
-
-## 5. CP Split 的并行收益和代价
 
 以 `64K/H16/chunk64` 为例：
 
@@ -250,11 +240,6 @@ chunks/segment = 32
 + 32 个 segment-local replay 短链
 ```
 
-并行主要来自两个地方：
-
-1. 不同 segment 的 summary 可以先并行准备。
-2. 每个 segment 拿到自己的 corrected `H_start` 后，可以独立执行短 replay。
-
 CP split 的 trade-off 是：
 
 | 收益 | 代价 |
@@ -268,7 +253,9 @@ CP split 的 trade-off 是：
 
 ---
 
-## 6. 为什么 Prepare-A 仍然关键
+## 5. Blocked-Inverse / Neumann Prepare：把 Chunk 内三角求解变成 Block Matmul/Add
+
+### 5.1 为什么 Prepare-A 仍然关键
 
 CP split 改的是 replay 的跨 segment 依赖形状，但 replay 仍然需要 chunk 内有效写入：
 
@@ -301,7 +288,7 @@ A = (I + M)^{-1}
 
 ---
 
-## 7. 串行 Forward Solve
+### 5.2 串行 Forward Solve
 
 从：
 
@@ -329,7 +316,7 @@ row0 -> row1 -> row2 -> ... -> row63
 
 ---
 
-## 8. Neumann 视角
+### 5.3 Neumann 视角
 
 这里能用 Neumann 视角，根本原因是 `M` 是 strictly lower triangular。
 严格下三角矩阵的对角线全是 0：
@@ -374,7 +361,7 @@ triangular inverse 可以被改写成固定的矩阵乘加结构。
 
 ---
 
-## 9. 分块结构
+### 5.4 分块结构
 
 把 `chunk64` 切成 4 个 16-token block：
 
@@ -408,7 +395,7 @@ X =
 
 ---
 
-## 10. 对角块求逆
+### 5.5 对角块求逆
 
 对角块满足：
 
@@ -435,7 +422,7 @@ D_i^{-1} = I - L_i + L_i^2 - \cdots + (-1)^{15}L_i^{15}
 
 ---
 
-## 11. 非对角块求逆
+### 5.6 非对角块求逆
 
 非对角块由 `T X = I` 逐层推出。
 
@@ -494,7 +481,7 @@ level 3: X30
 
 ---
 
-## 12. 分块求逆的通用公式
+### 5.7 分块求逆的通用公式
 
 对 block lower-triangular matrix：
 
