@@ -79,6 +79,8 @@ flowchart TD
     Replay --> HEnd["H_end"]
 ```
 
+这里的 `advance H_start -> H_end` 指的是 chunk 内按 token 顺序做三类操作：用当前 state 读 `Q[t] @ H[t]`，用 chunk-local `A/K/U/g` 读 local residual，然后用 effective write 更新 `H[t+1] = decay(g[t]) * H[t] + W[t] U[t]^T`。图里把它合成一个 replay 盒子，是为了突出跨 chunk 的依赖边界。
+
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
 chunkwise 的关键改写是：先把 token 级递推依赖局部化、矩阵化，变成 chunk-local triangular correction / solve。这个改写本身是前提，不是独立的加速来源；它让后续 workload 能落到 GPU 更擅长的形状上。
