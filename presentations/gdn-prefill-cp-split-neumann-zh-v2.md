@@ -63,6 +63,44 @@ effective write / residual:
     U = scale_g_beta(A @ V)      # [C, C] @ [C, DV] -> [C, DV]
 ```
 
+对应的 chunk 内计算流可以画成：
+
+```mermaid
+flowchart TD
+    K["K: chunk keys"]
+    V["V: chunk values"]
+    Q["Q: chunk queries"]
+    G["g, beta: gates / write scales"]
+    H0["H_start"]
+
+    Gram["chunk interaction\nL[i,j] = beta[i] * gate(i,j) * dot(K[i], K[j])"]
+    Solve["triangular correction / solve\nA = (I + L)^(-1)"]
+    W["effective key write\nW = scale(A @ K)"]
+    U["effective value write\nU = scale(A @ V)"]
+    Replay["chunk replay / state update\nH[t+1] = decay * H[t] + W[t] U[t]^T"]
+    Out["output read\no[t] = Q[t] @ H[t] + local residual"]
+    H1["H_end"]
+    O["o[chunk]"]
+
+    K --> Gram
+    G --> Gram
+    Gram --> Solve
+    Solve --> W
+    Solve --> U
+    K --> W
+    V --> U
+    G --> W
+    G --> U
+    H0 --> Replay
+    W --> Replay
+    U --> Replay
+    G --> Replay
+    Q --> Out
+    Replay --> Out
+    Replay --> H1
+    Out --> O
+```
+
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
 
 chunkwise 的关键改写是：先把 token 级递推依赖局部化、矩阵化，变成 chunk-local triangular correction / solve。这个改写本身是前提，不是独立的加速来源；它让后续 workload 能落到 GPU 更擅长的形状上。
