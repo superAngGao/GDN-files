@@ -64,32 +64,31 @@ effective write / residual:
 
 ```mermaid
 flowchart TD
-    GramI["chunk i local Gram\nG_i = K_i @ K_i^T"]
-    LI["elementwise causal/gate/beta folding\nL_i = lower_tri(beta * gate * G_i)"]
-    AI["triangular correction / solve\nA_i = (I + L_i)^(-1)"]
-    EWI["chunk i effective writes\nW_i = scale(A_i @ K_i)\nU_i = scale(A_i @ V_i)"]
-    ReplayI["chunk i replay\nH_start[i] -> H_end[i]"]
-    OutputI["output read\ngenerate o[chunk i]"]
-    NextStart["serial chunk boundary\nH_start[i+1] = H_end[i]"]
-    GramJ["chunk i+1 local Gram\nG_{i+1} = K_{i+1} @ K_{i+1}^T"]
-    LJ["elementwise causal/gate/beta folding\nL_{i+1} = lower_tri(beta * gate * G_{i+1})"]
-    AJ["triangular correction / solve\nA_{i+1} = (I + L_{i+1})^(-1)"]
-    EWJ["chunk i+1 effective writes\nW_{i+1}, U_{i+1}"]
-    ReplayJ["chunk i+1 replay\nH_start[i+1] -> H_end[i+1]"]
-    OutputJ["output read\ngenerate o[chunk i+1]"]
+    Gram["chunk-local Gram\nG = K @ K^T"]
+    L["elementwise causal/gate/beta folding\nL = lower_tri(beta * gate * G)"]
+    A["triangular correction / solve\nA = (I + L)^(-1)"]
+    EW["effective writes\nW = scale(A @ K)\nU = scale(A @ V)"]
 
-    GramI --> LI
-    LI --> AI
-    AI --> EWI
-    EWI --> ReplayI
-    ReplayI --> OutputI
-    ReplayI --> NextStart
-    GramJ --> LJ
-    LJ --> AJ
-    AJ --> EWJ
-    EWJ --> ReplayJ
-    NextStart --> ReplayJ
-    ReplayJ --> OutputJ
+    H0["initialize\nH[0] = H_start"]
+    Step["for each token t in chunk"]
+    Read["read current state\nstate_read[t] = Q[t] @ H[t]"]
+    Local["read local residual\nlocal[t] = residual(Q[t], K, U, A, g)"]
+    O["emit output\no[t] = state_read[t] + local[t]"]
+    Update["advance state\nH[t+1] = decay(g[t]) * H[t] + W[t] U[t]^T"]
+    HEnd["H_end = H[C]"]
+
+    Gram --> L
+    L --> A
+    A --> EW
+    EW --> Update
+    EW --> Local
+    H0 --> Step
+    Step --> Read
+    Step --> Update
+    Read --> O
+    Local --> O
+    Update --> Step
+    Step --> HEnd
 ```
 
 这里的 `scale_g_beta` 和 `gate(i,j)` 是实现约定下的折叠写法。不同 ABI 可以把 beta / gate factor 放在 `A`、effective write 或 replay 中不同位置；这里先只看 workload 的形状。
